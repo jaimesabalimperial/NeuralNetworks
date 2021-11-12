@@ -26,11 +26,12 @@ class Net(nn.Module):
         self.linear2 = nn.Linear(H1, H2)
         self.linear3 = nn.Linear(H2, H3)
         self.linear4 = nn.Linear(H3, D_out)
+        self.relu = nn.ReLU()
 
     def forward(self, x):
-        y_pred = self.linear1(x).clamp(min=0)
-        y_pred = self.linear2(y_pred).clamp(min=0)
-        y_pred = self.linear3(y_pred).clamp(min=0)
+        y_pred = self.relu(self.linear1(x).clamp(min=0))
+        y_pred = self.relu(self.linear2(y_pred).clamp(min=0))
+        y_pred = self.relu(self.linear3(y_pred).clamp(min=0))
         y_pred = self.linear4(y_pred)
         return y_pred
 
@@ -111,7 +112,7 @@ class Regressor():
             x["ocean_proximity"].value_counts()
             x.describe()
 
-            # Standardize training  data
+            # Standardize training data
             independent_scaler = StandardScaler()
             x = independent_scaler.fit_transform(x)
             self.independent_scaler = independent_scaler
@@ -126,10 +127,13 @@ class Regressor():
             # Impute the missing values in the data set
             x.iloc[:, 4:5] = self.imputer.fit_transform(x.iloc[:, 4:5])
 
-            # encode non-numerate features
-            x["ocean_proximity"] = self.labelEncoder.transform(x["ocean_proximity"])
-            x["ocean_proximity"].value_counts()
-            x.describe()
+            # encode non-numerate features if it wasn't encoded before
+            try:
+                x["ocean_proximity"] = self.labelEncoder.transform(x["ocean_proximity"])
+                x["ocean_proximity"].value_counts()
+                x.describe()
+            except TypeError:
+                pass
 
             # Standardize test data
             x = self.independent_scaler.transform(x)
@@ -170,6 +174,7 @@ class Regressor():
         loss_func = nn.MSELoss(reduction='sum')
         optimizer = torch.optim.Adam(regressor.parameters(), lr=1e-4)
 
+        # train the model with nb_epoch epochs and present the loss for each epoch
         losses = []
         for t in range(self.nb_epoch):
             prediction = regressor(X)  # input x and predict based on x
@@ -209,10 +214,10 @@ class Regressor():
         #                       ** START OF YOUR CODE **
         #######################################################################
 
-        X, _ = self._preprocessor(x, training=False) # Do not forget
+        # X, _ = self._preprocessor(x, training=False)  # I am not sure if needed here
         with torch.no_grad():
             saved_model = load_regressor()
-            prediction = saved_model(x)
+            prediction = saved_model.model(x)
         return prediction
 
         #######################################################################
@@ -237,8 +242,10 @@ class Regressor():
         #                       ** START OF YOUR CODE **
         #######################################################################
 
-        X, Y = self._preprocessor(x, y = y, training = False) # Do not forget
-        return 0 # Replace this code with your own
+        X, Y = self._preprocessor(x, y=y, training=False) # Do not forget
+        Y_pred = self.predict(X)
+        mean_absolute_error = sklearn.metrics.mean_absolute_error(Y, Y_pred)
+        return mean_absolute_error
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -310,7 +317,7 @@ def example_main():
     # This example trains on the whole available dataset. 
     # You probably want to separate some held-out data 
     # to make sure the model isn't overfitting
-    regressor = Regressor(x_train, nb_epoch=100)
+    regressor = Regressor(x_train, nb_epoch=3)
     regressor.fit(x_train, y_train)
     save_regressor(regressor)
 
