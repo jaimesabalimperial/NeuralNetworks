@@ -238,7 +238,7 @@ class LinearLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        self._W = None
+        self._W = xavier_init((self.n_in, self.n_out))
         self._b = None
 
         self._cache_current = None
@@ -265,7 +265,13 @@ class LinearLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        if self._b == None:
+            self._b = np.zeros((x.shape[0], self.n_out)) #Initialising b only at the start.
+        else:
+            pass
+
+        self._cache_current = x
+        return x @ self._W + self._b
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -288,7 +294,10 @@ class LinearLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        self._grad_b_current = np.ones((1,self.n_in)) @ grad_z
+        self._grad_W_current = self._cache_current.T @ grad_z
+
+        return grad_z @ self._W.T
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -305,7 +314,8 @@ class LinearLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        self._W += learning_rate*self._grad_W_current
+        self._b += learning_rate*self._grad_b_current
 
         #######################################################################
         #                       ** END OF YOUR CODE **
