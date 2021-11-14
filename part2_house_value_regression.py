@@ -19,7 +19,7 @@ import torch
 import torch.nn as nn
 
 class Net(nn.Module):
-    def __init__(self, D_in, D_out, H1=500, H2=1000, H3=200):
+    def __init__(self, D_in, D_out, H1=300, H2=100, H3=50):
         super(Net, self).__init__()
 
         self.linear1 = nn.Linear(D_in, H1)
@@ -62,7 +62,7 @@ class Regressor():
         self.nb_epoch = nb_epoch
         self.independent_scaler = None
         self.labelEncoder = None
-        self.imputer = None
+        self.data_mean = None
         return
 
         #######################################################################
@@ -97,11 +97,8 @@ class Regressor():
             print("Columns names are \n {}".format(x.columns))
 
             # Impute the missing values in the data set
-            print(x.isnull().sum())
-            imputer = sklearn.impute.SimpleImputer(missing_values=np.nan, strategy="median")
-            x.iloc[:, 4:5] = imputer.fit_transform(x.iloc[:, 4:5])
-            self.imputer = imputer
-            x.isnull().sum()
+            self.data_mean = x.mean()
+            x.fillna(x.mean(), inplace=True)
 
             # Label encode for categorical feature (ocean_proximity)
             print(x.dtypes)
@@ -113,6 +110,7 @@ class Regressor():
             x.describe()
 
             # Standardize training data
+            # Standardize x
             independent_scaler = StandardScaler()
             x = independent_scaler.fit_transform(x)
             self.independent_scaler = independent_scaler
@@ -125,7 +123,7 @@ class Regressor():
         # if test\validation, use the stored parameters
         else:
             # Impute the missing values in the data set
-            x.iloc[:, 4:5] = self.imputer.fit_transform(x.iloc[:, 4:5])
+            x.fillna(self.data_mean, inplace=True)
 
             # encode non-numerate features if it wasn't encoded before
             try:
@@ -172,7 +170,7 @@ class Regressor():
         X, Y = self._preprocessor(x, y=y, training=True)  # Do not forget
         regressor = Net(self.input_size, self.output_size)
         loss_func = nn.MSELoss(reduction='sum')
-        optimizer = torch.optim.Adam(regressor.parameters(), lr=1e-4)
+        optimizer = torch.optim.Adam(regressor.parameters(), lr=1e-1)
 
         # train the model with nb_epoch epochs and present the loss for each epoch
         losses = []
@@ -317,7 +315,7 @@ def example_main():
     # This example trains on the whole available dataset. 
     # You probably want to separate some held-out data 
     # to make sure the model isn't overfitting
-    regressor = Regressor(x_train, nb_epoch=3)
+    regressor = Regressor(x_train, nb_epoch=100)
     regressor.fit(x_train, y_train)
     save_regressor(regressor)
 
