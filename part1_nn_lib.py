@@ -104,6 +104,18 @@ class SigmoidLayer(Layer):
         """
         self._cache_current = None
 
+
+    def sigmoid(self, x):
+        """Calculates output of sigmoid activation function.
+        
+        Args: 
+            x {np.ndarray} -- Input array of shape (batch_size, n_in).
+        
+        Returns:
+            {np.ndarray} -- Output array of shape (batch_size, n_in).
+            """
+        return 1/(1+np.exp(-x))
+
     def forward(self, x):
         """ 
         Performs forward pass through the Sigmoid layer.
@@ -117,14 +129,9 @@ class SigmoidLayer(Layer):
         Returns:
             {np.ndarray} -- Output array of shape (batch_size, n_out)
         """
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
-        pass
+        self._cache_current = x
+        return self.sigmoid(x)
 
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
 
     def backward(self, grad_z):
         """
@@ -140,14 +147,14 @@ class SigmoidLayer(Layer):
             {np.ndarray} -- Array containing gradient with repect to layer
                 input, of shape (batch_size, n_in).
         """
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
-        pass
+        # dE/dW = dE/d(Out) * d(Out)/d(In) * d(In)/dW ---> chain rule
+        #d(Out)/d(In) = sigmoid(input)*(1-sigmoid(input))
+        #d(In)/dW = inputs (i.e self._cache_current)
+        #dE/d(Out) = grad_z
+        grad_sigmoid = grad_z * self.sigmoid(self._cache_current)*(1-self.sigmoid(self._cache_current)) * self._cache_current
 
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
+        return grad_sigmoid
+
 
 
 class ReluLayer(Layer):
@@ -160,6 +167,17 @@ class ReluLayer(Layer):
         Constructor of the Relu layer.
         """
         self._cache_current = None
+
+    def relu(self, x):
+        """Calculates output of relu activation function.
+        
+        Args: 
+            x {np.ndarray} -- Input array of shape (batch_size, n_in).
+        
+        Returns:
+            {np.ndarray} -- Output array of shape (batch_size, n_in).
+            """
+        return x*(x > 0)
 
     def forward(self, x):
         """ 
@@ -174,14 +192,8 @@ class ReluLayer(Layer):
         Returns:
             {np.ndarray} -- Output array of shape (batch_size, n_out)
         """
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
-        pass
-
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
+        self._cache_current = x
+        return self.relu(x)
 
     def backward(self, grad_z):
         """
@@ -197,15 +209,15 @@ class ReluLayer(Layer):
             {np.ndarray} -- Array containing gradient with repect to layer
                 input, of shape (batch_size, n_in).
         """
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
-        pass
+        # dE/dW = dE/d(Out) * d(Out)/d(In) * d(In)/dW ---> chain rule
+        #d(Out)/d(In) = 1 if x > 0, 0 otherwise
+        #d(In)/dW = inputs (i.e self._cache_current)
+        #d(Out)/d(In) * d(In)/dW = x if x > 0, 0 otherwise ---> same as activation function itself!
+        #dE/d(Out) = grad_z
 
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
+        grad_relu = grad_z * self.relu(self._cache_current)
 
+        return grad_relu
 
 class LinearLayer(Layer):
     """
@@ -226,7 +238,7 @@ class LinearLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        self._W = None
+        self._W = xavier_init((self.n_in, self.n_out))
         self._b = None
 
         self._cache_current = None
@@ -253,7 +265,13 @@ class LinearLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        if self._b == None:
+            self._b = np.zeros((x.shape[0], self.n_out)) #Initialising b only at the start.
+        else:
+            pass
+
+        self._cache_current = x
+        return x @ self._W + self._b
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -276,7 +294,10 @@ class LinearLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        self._grad_b_current = np.ones((1,self.n_in)) @ grad_z
+        self._grad_W_current = self._cache_current.T @ grad_z
+
+        return grad_z @ self._W.T
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -293,7 +314,8 @@ class LinearLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        self._W += learning_rate*self._grad_W_current
+        self._b += learning_rate*self._grad_b_current
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -345,10 +367,9 @@ class MultiLayerNetwork(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        return np.zeros((1, self.neurons[-1])) # Replace with your own code
-
+        return np.zeros((1, self.neurons[-1])) #Replace with your own code
         #######################################################################
-        #                       ** END OF YOUR CODE **
+        #                       ** END OF YOUR CODE **                         
         #######################################################################
 
     def __call__(self, x):
