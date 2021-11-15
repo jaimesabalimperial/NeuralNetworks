@@ -1,5 +1,6 @@
 import numpy as np
 import pickle
+import pandas as pd
 
 
 def xavier_init(size, gain = 1.0):
@@ -587,7 +588,17 @@ class Preprocessor(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        self.norm_params = [(np.min(data[feature]), np.max(data[feature])) for feature in data if data[feature].dtype == np.float64]
+        self.data_type = type(data)
+
+        if isinstance(data, (list, tuple, pd.DataFrame)):
+            data = np.asarray(data)
+        
+        self.norm_params = []
+        self.feature_indices = []
+        for i in range(data.shape[1]):
+            if all([type(sample) == float for sample in data[:,i]]):
+                self.norm_params.append((np.min(data[:,i]), np.max(data[:,i])))
+                self.feature_indices.append(i)
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
@@ -605,9 +616,16 @@ class Preprocessor(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        for i, feature in enumerate(list(data.columns)):
-            if data[feature].dtype == np.float64:
-                data[feature] = (data[feature] - self.norm_params[i][0])/(self.norm_params[i][1]-self.norm_params[i][0])
+        if isinstance(data, (list, tuple, pd.DataFrame)):
+            data = np.asarray(data)
+
+        idxs = self.feature_indices
+        for i in range(data.shape[1]):
+            if all([type(sample) == float for sample in data[:,i]]):
+                data[:,i] = (data[:,i] - self.norm_params[idxs[i]][0])/(self.norm_params[idxs[i]][1]-self.norm_params[idxs[i]][0])
+
+        if self.data_type == pd.DataFrame:
+            return pd.DataFrame(data)
 
         return data
         #######################################################################
@@ -627,15 +645,21 @@ class Preprocessor(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        for i, feature in enumerate(list(data.columns)):
-            if data[feature].dtype == np.float64:
-                data[feature] = data[feature]*(self.norm_params[i][1]-self.norm_params[i][0]) + self.norm_params[i][0]
+        if isinstance(data, (list, tuple, pd.DataFrame)):
+            data = np.asarray(data)
+        
+        idxs = self.feature_indices
+        for i in range(data.shape[1]):
+            if all([type(sample) == float for sample in data[:,i]]):
+                data[:,i] = data[:,i]*(self.norm_params[idxs[i]][1]-self.norm_params[idxs[i]][0]) + self.norm_params[idxs[i]][0]
+
+        if self.data_type == pd.DataFrame:
+            return pd.DataFrame(data)
 
         return data
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
-
 
 def example_main():
     input_dim = 4
