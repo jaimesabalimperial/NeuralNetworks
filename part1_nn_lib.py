@@ -271,7 +271,7 @@ class LinearLayer(Layer):
             pass
 
         self._cache_current = x
-        return x @ self._W + self._b
+        return x @ self._W + self._b 
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -565,8 +565,7 @@ class Preprocessor(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
-
+        self.norm_params = [(np.min(data[feature]), np.max(data[feature])) for feature in data if data[feature].dtype == np.float64]
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
@@ -584,8 +583,11 @@ class Preprocessor(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        for i, feature in enumerate(list(data.columns)):
+            if data[feature].dtype == np.float64:
+                data[feature] = (data[feature] - self.norm_params[i][0])/(self.norm_params[i][1]-self.norm_params[i][0])
 
+        return data
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
@@ -603,8 +605,11 @@ class Preprocessor(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        for i, feature in enumerate(list(data.columns)):
+            if data[feature].dtype == np.float64:
+                data[feature] = data[feature]*(self.norm_params[i][1]-self.norm_params[i][0]) + self.norm_params[i][0]
 
+        return data
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
