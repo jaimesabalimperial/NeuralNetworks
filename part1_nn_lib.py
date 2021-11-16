@@ -3,7 +3,7 @@ import pickle
 import pandas as pd
 
 
-def xavier_init(size, gain = 1.0):
+def xavier_init(size, gain=1.0):
     """
     Xavier initialization of network weights.
 
@@ -105,7 +105,6 @@ class SigmoidLayer(Layer):
         """
         self._cache_current = None
 
-
     def sigmoid(self, x):
         """Calculates output of sigmoid activation function.
         
@@ -115,7 +114,7 @@ class SigmoidLayer(Layer):
         Returns:
             {np.ndarray} -- Output array of shape (batch_size, n_in).
             """
-        return 1/(1+np.exp(-x))
+        return 1 / (1 + np.exp(-x))
 
     def forward(self, x):
         """ 
@@ -133,7 +132,6 @@ class SigmoidLayer(Layer):
         self._cache_current = x
         return self.sigmoid(x)
 
-
     def backward(self, grad_z):
         """
         Given `grad_z`, the gradient of some scalar (e.g. loss) with respect to
@@ -149,13 +147,12 @@ class SigmoidLayer(Layer):
                 input, of shape (batch_size, n_in).
         """
         # dE/dW = dE/d(Out) * d(Out)/d(In) * d(In)/dW ---> chain rule
-        #d(Out)/d(In) = sigmoid(input)*(1-sigmoid(input))
-        #d(In)/dW = inputs (i.e self._cache_current)
-        #dE/d(Out) = grad_z
-        #grad_sigmoid = grad_z * self.sigmoid(self._cache_current)*(1-self.sigmoid(self._cache_current)) * self._cache_current
-        grad_sigmoid = grad_z * np.linalg.matrix_power(self._cache_current, -2)*(-1)
+        # d(Out)/d(In) = sigmoid(input)*(1-sigmoid(input))
+        # d(In)/dW = inputs (i.e self._cache_current)
+        # dE/d(Out) = grad_z
+        # grad_sigmoid = grad_z * self.sigmoid(self._cache_current)*(1-self.sigmoid(self._cache_current)) * self._cache_current
+        grad_sigmoid = grad_z * np.linalg.matrix_power(self._cache_current, -2) * (-1)
         return grad_sigmoid
-
 
 
 class ReluLayer(Layer):
@@ -178,7 +175,7 @@ class ReluLayer(Layer):
         Returns:
             {np.ndarray} -- Output array of shape (batch_size, n_in).
             """
-        return x*(x > 0)
+        return x * (x > 0)
 
     def forward(self, x):
         """ 
@@ -211,15 +208,16 @@ class ReluLayer(Layer):
                 input, of shape (batch_size, n_in).
         """
         # dE/dW = dE/d(Out) * d(Out)/d(In) * d(In)/dW ---> chain rule
-        #d(Out)/d(In) = 1 if x > 0, 0 otherwise
-        #d(In)/dW = inputs (i.e self._cache_current)
-        #d(Out)/d(In) * d(In)/dW = x if x > 0, 0 otherwise ---> same as activation function itself!
-        #dE/d(Out) = grad_z
+        # d(Out)/d(In) = 1 if x > 0, 0 otherwise
+        # d(In)/dW = inputs (i.e self._cache_current)
+        # d(Out)/d(In) * d(In)/dW = x if x > 0, 0 otherwise ---> same as activation function itself!
+        # dE/d(Out) = grad_z
 
-        #grad_relu = grad_z * self.relu(self._cache_current)
-        grad_relu = grad_z * 1*(self._cache_current > 0)
+        # grad_relu = grad_z * self.relu(self._cache_current)
+        grad_relu = grad_z * 1 * (self._cache_current > 0)
 
         return grad_relu
+
 
 class LinearLayer(Layer):
     """
@@ -241,7 +239,7 @@ class LinearLayer(Layer):
         #                       ** START OF YOUR CODE **
         #######################################################################
         self._W = xavier_init((self.n_in, self.n_out))
-        self._b = None
+        self._b = np.zeros((1, self.n_out))
 
         self._cache_current = None
         self._grad_W_current = None
@@ -267,13 +265,9 @@ class LinearLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        if self._b == None:
-            self._b = np.zeros((x.shape[0], self.n_out)) #Initialising b only at the start.
-        else:
-            pass
-
+        z = x @ self._W + self._b
         self._cache_current = x
-        return x @ self._W + self._b 
+        return z
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -296,7 +290,7 @@ class LinearLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        self._grad_b_current = grad_z
+        self._grad_b_current = np.ones(self._cache_current.shape[0]) @ grad_z
         self._grad_W_current = self._cache_current.T @ grad_z
 
         return grad_z @ self._W.T
@@ -316,9 +310,9 @@ class LinearLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        
-        self._W += learning_rate*self._grad_W_current
-        self._b += learning_rate*self._grad_b_current
+
+        self._W -= learning_rate * self._grad_W_current
+        self._b -= learning_rate * self._grad_b_current
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -352,7 +346,7 @@ class MultiLayerNetwork(object):
         #                       ** START OF YOUR CODE **
         #######################################################################
         self._layers = []
-        
+
         linear_input = LinearLayer(self.input_dim, neurons[0])
         self._layers.append(linear_input)
 
@@ -365,17 +359,16 @@ class MultiLayerNetwork(object):
                 # my_dict[x] = ReluLayer
                 # self._layers += [my_dict[x]]
             elif self.activations[i] == "sigmoid":
-                #setattr(self, "activation_"+str(i), SigmoidLayer)
+                # setattr(self, "activation_"+str(i), SigmoidLayer)
                 self._layers += [SigmoidLayer()]
             elif self.activations[i] == "identity":
-                self._layers += [1] # for linear no activation
-            if i+1 < len(self.neurons):
-                #setattr(self, "linear_hidden_"+str(i), LinearLayer(self.neurons[i], self.neurons[i+1]))
-                self._layers += [LinearLayer(self.neurons[i], self.neurons[i+1])]
-
+                self._layers += [1]  # for linear no activation
+            if i + 1 < len(self.neurons):
+                # setattr(self, "linear_hidden_"+str(i), LinearLayer(self.neurons[i], self.neurons[i+1]))
+                self._layers += [LinearLayer(self.neurons[i], self.neurons[i + 1])]
 
         print(self._layers)
-            
+
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
@@ -400,10 +393,10 @@ class MultiLayerNetwork(object):
                 output = layer.forward(input)
                 input = output
             else:
-                pass # if identity (i.e. linear) no activation so input and output are the same, Jamie is this okay? :)
-            
+                pass  # if identity (i.e. linear) no activation so input and output are the same, Jamie is this okay? :)
+
         return output
-        #return np.zeros((1, self.neurons[-1])) #Replace with your own code
+        # return np.zeros((1, self.neurons[-1])) #Replace with your own code
         #######################################################################
         #                       ** END OF YOUR CODE **                         
         #######################################################################
@@ -478,13 +471,13 @@ class Trainer(object):
     """
 
     def __init__(
-        self,
-        network,
-        batch_size,
-        nb_epoch,
-        learning_rate,
-        loss_fun,
-        shuffle_flag,
+            self,
+            network,
+            batch_size,
+            nb_epoch,
+            learning_rate,
+            loss_fun,
+            shuffle_flag,
     ):
         """
         Constructor of the Trainer.
@@ -509,7 +502,11 @@ class Trainer(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        self._loss_layer = None
+        if self.loss_fun == "mse":
+            self._loss_layer = MSELossLayer()
+        elif self.loss_fun == "cross_entropy":
+            self._loss_layer = CrossEntropyLossLayer()
+
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
@@ -532,7 +529,8 @@ class Trainer(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        idx = np.random.permutation(len(input_dataset))
+        return input_dataset[idx], target_dataset[idx]
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -561,7 +559,25 @@ class Trainer(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+
+
+
+        # run a loop over nb_epoch
+        for epoch in range(self.nb_epoch):
+            if self.shuffle_flag:
+                input_dataset, target_dataset = self.shuffle(input_dataset, target_dataset)
+            # divide to batches
+            for i in range(0, len(target_dataset), self.batch_size):
+                if i + self.batch_size < len(target_dataset) + 1:
+                    batch_input_data = input_dataset[i:i + self.batch_size]
+                    batch_target_dataset = target_dataset[i:i + self.batch_size]
+                    y_pred = self.network.forward(batch_input_data)
+                    loss = self._loss_layer.forward(y_pred, batch_target_dataset)
+                    print(f"Training loss is: {loss}")
+                    grad_z = self._loss_layer.backward()
+                    # print(f"grad z {grad_z}")
+                    self.network.backward(grad_z)
+                    self.network.update_params(self.learning_rate)
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -578,6 +594,9 @@ class Trainer(object):
             - target_dataset {np.ndarray} -- Array of corresponding targets, of
                 shape (#_evaluation_data_points, #output_neurons).
         """
+        y_pred = self.network.forward(input_dataset)
+        loss = self._loss_layer.forward(y_pred, target_dataset)
+        return loss
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
@@ -586,7 +605,6 @@ class Trainer(object):
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
-
 
 
 class Preprocessor(object):
@@ -611,12 +629,12 @@ class Preprocessor(object):
 
         if isinstance(data, (list, tuple, pd.DataFrame)):
             data = np.asarray(data)
-        
+
         self.norm_params = []
         self.feature_indices = []
         for i in range(data.shape[1]):
-            if all([type(sample) in [float, np.float64] for sample in data[:,i]]):
-                self.norm_params.append((np.min(data[:,i]), np.max(data[:,i])))
+            if all([type(sample) in [float, np.float64] for sample in data[:, i]]):
+                self.norm_params.append((np.min(data[:, i]), np.max(data[:, i])))
                 self.feature_indices.append(i)
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -640,8 +658,9 @@ class Preprocessor(object):
 
         idxs = self.feature_indices
         for i in range(data.shape[1]):
-            if all([type(sample) in [float, np.float64] for sample in data[:,i]]):
-                data[:,i] = (data[:,i] - self.norm_params[idxs[i]][0])/(self.norm_params[idxs[i]][1]-self.norm_params[idxs[i]][0])
+            if all([type(sample) in [float, np.float64] for sample in data[:, i]]):
+                data[:, i] = (data[:, i] - self.norm_params[idxs[i]][0]) / (
+                        self.norm_params[idxs[i]][1] - self.norm_params[idxs[i]][0])
 
         if self.data_type == pd.DataFrame:
             return pd.DataFrame(data)
@@ -666,11 +685,12 @@ class Preprocessor(object):
         #######################################################################
         if isinstance(data, (list, tuple, pd.DataFrame)):
             data = np.asarray(data)
-        
+
         idxs = self.feature_indices
         for i in range(data.shape[1]):
-            if all([type(sample) in [float, np.float64] for sample in data[:,i]]):
-                data[:,i] = data[:,i]*(self.norm_params[idxs[i]][1]-self.norm_params[idxs[i]][0]) + self.norm_params[idxs[i]][0]
+            if all([type(sample) in [float, np.float64] for sample in data[:, i]]):
+                data[:, i] = data[:, i] * (self.norm_params[idxs[i]][1] - self.norm_params[idxs[i]][0]) + \
+                             self.norm_params[idxs[i]][0]
 
         if self.data_type == pd.DataFrame:
             return pd.DataFrame(data)
@@ -679,6 +699,8 @@ class Preprocessor(object):
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
+
+
 def example_main():
     input_dim = 4
     neurons = [16, 3]
