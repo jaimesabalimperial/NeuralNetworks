@@ -146,7 +146,7 @@ class SigmoidLayer(Layer):
             {np.ndarray} -- Array containing gradient with repect to layer
                 input, of shape (batch_size, n_in).
         """
-        grad_sigmoid = self._cache_current * (1 - self._cache_current)
+        grad_sigmoid = self.sigmoid(self._cache_current) * (1 - self.sigmoid(self._cache_current))
         return grad_z * grad_sigmoid
 
 
