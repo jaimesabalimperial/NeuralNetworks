@@ -13,10 +13,10 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor
-
 from sklearn import metrics
 import torch
 import torch.nn as nn
+
 
 class Net(nn.Module):
     def __init__(self, D_in, D_out, H1=300, H2=100, H3=50):
@@ -35,17 +35,18 @@ class Net(nn.Module):
         y_pred = self.linear4(y_pred)
         return y_pred
 
+
 class Regressor():
 
     def __init__(self, x, nb_epoch=1000):
         # You can add any input parameters you need
         # Remember to set them with a default value for LabTS tests
-        """ 
+        """
         Initialise the model.
-          
+
         Arguments:
-            - x {pd.DataFrame} -- Raw input data of shape 
-                (batch_size, input_size), used to compute the size 
+            - x {pd.DataFrame} -- Raw input data of shape
+                (batch_size, input_size), used to compute the size
                 of the network.
             - nb_epoch {int} -- number of epoch to train the network.
 
@@ -63,21 +64,22 @@ class Regressor():
         self.independent_scaler = None
         self.labelEncoder = None
         self.data_mean = None
-        self.losses = None
+        self.model = None
+        return
 
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
 
     def _preprocessor(self, x, y=None, training=False):
-        """ 
+        """
         Preprocess input of the network.
-          
+
         Arguments:
-            - x {pd.DataFrame} -- Raw input array of shape 
+            - x {pd.DataFrame} -- Raw input array of shape
                 (batch_size, input_size).
             - y {pd.DataFrame} -- Raw target array of shape (batch_size, 1).
-            - training {boolean} -- Boolean indicating if we are training or 
+            - training {boolean} -- Boolean indicating if we are training or
                 testing the model.
 
         Returns:
@@ -148,13 +150,12 @@ class Regressor():
         #                       ** END OF YOUR CODE **
         #######################################################################
 
-        
     def fit(self, x, y):
         """
         Regressor training function
 
         Arguments:
-            - x {pd.DataFrame} -- Raw input array of shape 
+            - x {pd.DataFrame} -- Raw input array of shape
                 (batch_size, input_size).
             - y {pd.DataFrame} -- Raw output array of shape (batch_size, 1).
 
@@ -193,13 +194,12 @@ class Regressor():
         #                       ** END OF YOUR CODE **
         #######################################################################
 
-            
     def predict(self, x):
         """
         Ouput the value corresponding to an input x.
 
         Arguments:
-            x {pd.DataFrame} -- Raw input array of shape 
+            x {pd.DataFrame} -- Raw input array of shape
                 (batch_size, input_size).
 
         Returns:
@@ -214,7 +214,7 @@ class Regressor():
         # X, _ = self._preprocessor(x, training=False)  # I am not sure if needed here
         with torch.no_grad():
             saved_model = load_regressor()
-            prediction = saved_model.model(x)
+            prediction = saved_model(x)
         return prediction
 
         #######################################################################
@@ -226,7 +226,7 @@ class Regressor():
         Function to evaluate the model accuracy on a validation dataset.
 
         Arguments:
-            - x {pd.DataFrame} -- Raw input array of shape 
+            - x {pd.DataFrame} -- Raw input array of shape
                 (batch_size, input_size).
             - y {pd.DataFrame} -- Raw ouput array of shape (batch_size, 1).
 
@@ -239,7 +239,7 @@ class Regressor():
         #                       ** START OF YOUR CODE **
         #######################################################################
 
-        X, Y = self._preprocessor(x, y=y, training=False) # Do not forget
+        X, Y = self._preprocessor(x, y=y, training=False)  # Do not forget
         Y_pred = self.predict(X)
         mean_absolute_error = sklearn.metrics.mean_absolute_error(Y, Y_pred)
         return mean_absolute_error
@@ -256,39 +256,38 @@ class Regressor():
         plt.ylabel("MSE Loss")
 
 
-def save_regressor(trained_model): 
-    """ 
+def save_regressor(trained_model):
+    """
     Utility function to save the trained regressor model in part2_model.pickle.
     """
     # If you alter this, make sure it works in tandem with load_regressor
-    with open('part2_model.pickle', 'wb') as target:
+    with open('Neural_Networks_41/part2_model.pickle', 'wb') as target:
         pickle.dump(trained_model, target)
     print("\nSaved model in part2_model.pickle\n")
 
 
-def load_regressor(): 
-    """ 
+def load_regressor():
+    """
     Utility function to load the trained regressor model in part2_model.pickle.
     """
     # If you alter this, make sure it works in tandem with save_regressor
-    with open('part2_model.pickle', 'rb') as target:
+    with open('Neural_Networks_41/part2_model.pickle', 'rb') as target:
         trained_model = pickle.load(target)
     print("\nLoaded model in part2_model.pickle\n")
     return trained_model
 
 
-
-def RegressorHyperParameterSearch(): 
+def RegressorHyperParameterSearch():
     # Ensure to add whatever inputs you deem necessary to this function
     """
-    Performs a hyper-parameter for fine-tuning the regressor implemented 
+    Performs a hyper-parameter for fine-tuning the regressor implemented
     in the Regressor class.
 
     Arguments:
         Add whatever inputs you need.
-        
+
     Returns:
-        The function should return your optimised hyper-parameters. 
+        The function should return your optimised hyper-parameters.
 
     """
 
@@ -303,31 +302,46 @@ def RegressorHyperParameterSearch():
     #######################################################################
 
 
-
 def example_main():
-
     output_label = "median_house_value"
 
     # Use pandas to read CSV data as it contains various object types
     # Feel free to use another CSV reader tool
     # But remember that LabTS tests take Pandas Dataframe as inputs
-    data = pd.read_csv("housing.csv") 
+    data = pd.read_csv("Neural_Networks_41/housing.csv")
+
+    # options for train test split
+    '''bins = 5
+    sale_price_bins = pd.qcut(
+        data[output_label], q=bins, labels=list(range(bins)))
+    x_train, x_test, y_train, y_test = train_test_split(
+        data.drop(columns=output_label),
+        data[output_label],
+        random_state=12,
+        stratify=sale_price_bins)
+
+    x_train, x_test, y_train, y_test = train_test_split(
+        data.drop(columns=output_label),
+        data[output_label],
+        test_size=0.33, random_state=42)'''
 
     # Spliting input and output
     x_train = data.loc[:, data.columns != output_label]
     y_train = data.loc[:, [output_label]]
 
     # Training
-    # This example trains on the whole available dataset. 
-    # You probably want to separate some held-out data 
+    # This example trains on the whole available dataset.
+    # You probably want to separate some held-out data
     # to make sure the model isn't overfitting
     regressor = Regressor(x_train, nb_epoch=100)
     regressor.fit(x_train, y_train)
-    save_regressor(regressor)
+    save_regressor(regressor.model)
 
     # Error
     error = regressor.score(x_train, y_train)
-    print("\nRegressor error: {}\n".format(error))
+    print("\nTrain regressor error: {}\n".format(error))
+    # error = regressor.score(x_test, y_test)
+    # print("\nTest regressor error: {}\n".format(error))
 
 
 if __name__ == "__main__":
