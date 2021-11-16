@@ -121,6 +121,8 @@ class Regressor():
             x = torch.tensor(x, dtype=torch.float)
             if y is not None:
                 y = torch.tensor(y.values, dtype=torch.float)
+                new_shape = (len(y), 1)
+                y = y.view(new_shape)
 
         # if test\validation, use the stored parameters
         else:
@@ -132,7 +134,7 @@ class Regressor():
                 x["ocean_proximity"] = self.labelEncoder.transform(x["ocean_proximity"])
                 x["ocean_proximity"].value_counts()
                 x.describe()
-            except TypeError or ValueError:
+            except ValueError:
                 pass
 
             # Standardize test data
@@ -142,6 +144,8 @@ class Regressor():
             x = torch.tensor(x, dtype=torch.float)
             if y is not None:
                 y = torch.tensor(y.values, dtype=torch.float)
+                new_shape = (len(y), 1)
+                y = y.view(new_shape)
 
         # Return preprocessed x and y, return None for y if it was None
         return x, y
@@ -254,6 +258,7 @@ class Regressor():
         plt.plot(np.linspace(0, len(self.losses), len(self.losses)), self.losses)
         plt.xlabel("Epoch")
         plt.ylabel("MSE Loss")
+        plt.show()
 
 
 def save_regressor(trained_model):
@@ -261,7 +266,7 @@ def save_regressor(trained_model):
     Utility function to save the trained regressor model in part2_model.pickle.
     """
     # If you alter this, make sure it works in tandem with load_regressor
-    with open('Neural_Networks_41/part2_model.pickle', 'wb') as target:
+    with open('part2_model.pickle', 'wb') as target:
         pickle.dump(trained_model, target)
     print("\nSaved model in part2_model.pickle\n")
 
@@ -271,7 +276,7 @@ def load_regressor():
     Utility function to load the trained regressor model in part2_model.pickle.
     """
     # If you alter this, make sure it works in tandem with save_regressor
-    with open('Neural_Networks_41/part2_model.pickle', 'rb') as target:
+    with open('part2_model.pickle', 'rb') as target:
         trained_model = pickle.load(target)
     print("\nLoaded model in part2_model.pickle\n")
     return trained_model
@@ -308,26 +313,26 @@ def example_main():
     # Use pandas to read CSV data as it contains various object types
     # Feel free to use another CSV reader tool
     # But remember that LabTS tests take Pandas Dataframe as inputs
-    data = pd.read_csv("Neural_Networks_41/housing.csv")
+    data = pd.read_csv("housing.csv")
 
     # options for train test split
-    '''bins = 5
-    sale_price_bins = pd.qcut(
-        data[output_label], q=bins, labels=list(range(bins)))
-    x_train, x_test, y_train, y_test = train_test_split(
-        data.drop(columns=output_label),
-        data[output_label],
-        random_state=12,
-        stratify=sale_price_bins)
+    #bins = 5
+    #sale_price_bins = pd.qcut(
+    #    data[output_label], q=bins, labels=list(range(bins)))
+    #x_train, x_test, y_train, y_test = train_test_split(
+    #    data.drop(columns=output_label),
+    #    data[output_label],
+    #    random_state=12,
+    #    stratify=sale_price_bins)
 
     x_train, x_test, y_train, y_test = train_test_split(
         data.drop(columns=output_label),
         data[output_label],
-        test_size=0.33, random_state=42)'''
+        test_size=0.33, random_state=42)
 
     # Spliting input and output
-    x_train = data.loc[:, data.columns != output_label]
-    y_train = data.loc[:, [output_label]]
+    #x_train = data.loc[:, data.columns != output_label]
+    #y_train = data.loc[:, [output_label]]
 
     # Training
     # This example trains on the whole available dataset.
@@ -335,11 +340,13 @@ def example_main():
     # to make sure the model isn't overfitting
     regressor = Regressor(x_train, nb_epoch=100)
     regressor.fit(x_train, y_train)
+
+    regressor.plot_losses()
     save_regressor(regressor.model)
 
-    # Error
-    error = regressor.score(x_train, y_train)
-    print("\nTrain regressor error: {}\n".format(error))
+    # Error on test set
+    error = regressor.score(x_test, y_test)
+    print("\nTest regressor error: {}\n".format(error))
     # error = regressor.score(x_test, y_test)
     # print("\nTest regressor error: {}\n".format(error))
 
