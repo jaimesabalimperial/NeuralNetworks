@@ -354,7 +354,7 @@ class MultiLayerNetwork(object):
         linear_input = LinearLayer(self.input_dim, neurons[0])
         self._layers.append(linear_input)
 
-        for i in len(self.neurons):
+        for i in range(len(self.neurons)):
             if self.activations[i] == "relu":
                 setattr(self, "activation_"+str(i), ReluLayer)
             elif self.activations[i] == "sigmoid":
@@ -570,6 +570,7 @@ class Trainer(object):
         #######################################################################
 
 
+
 class Preprocessor(object):
     """
     Preprocessor: Object used to apply "preprocessing" operation to datasets.
@@ -596,7 +597,7 @@ class Preprocessor(object):
         self.norm_params = []
         self.feature_indices = []
         for i in range(data.shape[1]):
-            if all([type(sample) == float for sample in data[:,i]]):
+            if all([type(sample) in [float, np.float64] for sample in data[:,i]]):
                 self.norm_params.append((np.min(data[:,i]), np.max(data[:,i])))
                 self.feature_indices.append(i)
         #######################################################################
@@ -621,7 +622,7 @@ class Preprocessor(object):
 
         idxs = self.feature_indices
         for i in range(data.shape[1]):
-            if all([type(sample) == float for sample in data[:,i]]):
+            if all([type(sample) in [float, np.float64] for sample in data[:,i]]):
                 data[:,i] = (data[:,i] - self.norm_params[idxs[i]][0])/(self.norm_params[idxs[i]][1]-self.norm_params[idxs[i]][0])
 
         if self.data_type == pd.DataFrame:
@@ -650,7 +651,7 @@ class Preprocessor(object):
         
         idxs = self.feature_indices
         for i in range(data.shape[1]):
-            if all([type(sample) == float for sample in data[:,i]]):
+            if all([type(sample) in [float, np.float64] for sample in data[:,i]]):
                 data[:,i] = data[:,i]*(self.norm_params[idxs[i]][1]-self.norm_params[idxs[i]][0]) + self.norm_params[idxs[i]][0]
 
         if self.data_type == pd.DataFrame:
@@ -660,7 +661,6 @@ class Preprocessor(object):
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
-
 def example_main():
     input_dim = 4
     neurons = [16, 3]
