@@ -152,8 +152,8 @@ class SigmoidLayer(Layer):
         #d(Out)/d(In) = sigmoid(input)*(1-sigmoid(input))
         #d(In)/dW = inputs (i.e self._cache_current)
         #dE/d(Out) = grad_z
-        grad_sigmoid = grad_z * self.sigmoid(self._cache_current)*(1-self.sigmoid(self._cache_current)) * self._cache_current
-
+        #grad_sigmoid = grad_z * self.sigmoid(self._cache_current)*(1-self.sigmoid(self._cache_current)) * self._cache_current
+        grad_sigmoid = grad_z * np.linalg.matrix_power(self._cache_current, -2)*(-1)
         return grad_sigmoid
 
 
@@ -216,7 +216,8 @@ class ReluLayer(Layer):
         #d(Out)/d(In) * d(In)/dW = x if x > 0, 0 otherwise ---> same as activation function itself!
         #dE/d(Out) = grad_z
 
-        grad_relu = grad_z * self.relu(self._cache_current)
+        #grad_relu = grad_z * self.relu(self._cache_current)
+        grad_relu = grad_z * 1*(self._cache_current > 0)
 
         return grad_relu
 
@@ -295,7 +296,7 @@ class LinearLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        self._grad_b_current = np.ones((1,self.n_in)) @ grad_z
+        self._grad_b_current = grad_z
         self._grad_W_current = self._cache_current.T @ grad_z
 
         return grad_z @ self._W.T
@@ -315,6 +316,7 @@ class LinearLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
+        
         self._W += learning_rate*self._grad_W_current
         self._b += learning_rate*self._grad_b_current
 
@@ -356,11 +358,23 @@ class MultiLayerNetwork(object):
 
         for i in range(len(self.neurons)):
             if self.activations[i] == "relu":
-                setattr(self, "activation_"+str(i), ReluLayer)
+                self._layers += [ReluLayer()]
+                # setattr(self, "activation_"+str(i), ReluLayer)
+                # my_dict = {}
+                # x = "activation_"+str(i)
+                # my_dict[x] = ReluLayer
+                # self._layers += [my_dict[x]]
             elif self.activations[i] == "sigmoid":
-                setattr(self, "activation_"+str(i), SigmoidLayer)
+                #setattr(self, "activation_"+str(i), SigmoidLayer)
+                self._layers += [SigmoidLayer()]
+            elif self.activations[i] == "identity":
+                self._layers += [1] # for linear no activation
             if i+1 < len(self.neurons):
-                setattr(self, "linear_hidden_"+str(i), LinearLayer(self.neurons, self.neurons[i+1]))
+                #setattr(self, "linear_hidden_"+str(i), LinearLayer(self.neurons[i], self.neurons[i+1]))
+                self._layers += [LinearLayer(self.neurons[i], self.neurons[i+1])]
+
+
+        print(self._layers)
             
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -382,8 +396,11 @@ class MultiLayerNetwork(object):
         #######################################################################
         input = x
         for layer in self._layers:
-            output = layer.forward(input)
-            input = output
+            if layer != 1:
+                output = layer.forward(input)
+                input = output
+            else:
+                pass # if identity (i.e. linear) no activation so input and output are the same, Jamie is this okay? :)
             
         return output
         #return np.zeros((1, self.neurons[-1])) #Replace with your own code
@@ -411,7 +428,8 @@ class MultiLayerNetwork(object):
         #######################################################################
         grad_z = grad_z
         for layer in self._layers[::-1]:
-            grad_z = layer.backward(grad_z)
+            if layer != 1:
+                grad_z = layer.backward(grad_z)
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -429,8 +447,8 @@ class MultiLayerNetwork(object):
         #                       ** START OF YOUR CODE **
         #######################################################################
         for layer in self._layers:
-            if hasattr(layer, "update_params"):
-                layer.update_params
+            if hasattr(layer, 'update_params'):
+                layer.update_params(learning_rate)
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -672,7 +690,9 @@ def example_main():
 
     x = dat[:, :4]
     y = dat[:, 4:]
-
+    # net.forward(x)
+    # net.backward(dat[:, :3])
+    # net.update_params(learning_rate=float(0.1))
     split_idx = int(0.8 * len(x))
 
     x_train = x[:split_idx]
