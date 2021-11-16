@@ -65,7 +65,7 @@ class Regressor():
         self.labelEncoder = None
         self.data_mean = None
         self.model = None
-        return
+        self.losses = None
 
         #######################################################################
         #                       ** END OF YOUR CODE **
