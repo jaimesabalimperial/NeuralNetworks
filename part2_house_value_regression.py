@@ -63,7 +63,7 @@ class Regressor():
         self.independent_scaler = None
         self.labelEncoder = None
         self.data_mean = None
-        return
+        self.losses = None
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -130,7 +130,7 @@ class Regressor():
                 x["ocean_proximity"] = self.labelEncoder.transform(x["ocean_proximity"])
                 x["ocean_proximity"].value_counts()
                 x.describe()
-            except TypeError:
+            except TypeError or ValueError:
                 pass
 
             # Standardize test data
@@ -185,8 +185,7 @@ class Regressor():
             loss.backward()  # backpropagation, compute gradients
             optimizer.step()  # apply gradients
 
-        plt.figure()
-        plt.plot(range(len(losses)), losses)
+        self.losses = losses
         self.model = regressor
         return regressor
 
@@ -248,6 +247,13 @@ class Regressor():
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
+    
+    def plot_losses(self):
+        plt.figure()
+        plt.grid()
+        plt.plot(np.linspace(0, len(self.losses), len(self.losses)), self.losses)
+        plt.xlabel("Epoch")
+        plt.ylabel("MSE Loss")
 
 
 def save_regressor(trained_model): 
