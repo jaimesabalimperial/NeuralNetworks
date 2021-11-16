@@ -114,7 +114,7 @@ class SigmoidLayer(Layer):
         Returns:
             {np.ndarray} -- Output array of shape (batch_size, n_in).
             """
-        return 1 / (1 + np.exp(-x))
+        return 1.0 / (1.0 + np.exp(-x))
 
     def forward(self, x):
         """ 
@@ -151,8 +151,8 @@ class SigmoidLayer(Layer):
         # d(In)/dW = inputs (i.e self._cache_current)
         # dE/d(Out) = grad_z
         # grad_sigmoid = grad_z * self.sigmoid(self._cache_current)*(1-self.sigmoid(self._cache_current)) * self._cache_current
-        grad_sigmoid = grad_z * np.linalg.matrix_power(self._cache_current, -2) * (-1)
-        return grad_sigmoid
+        grad_sigmoid = self._cache_current * (1 - self._cache_current)
+        return grad_z * grad_sigmoid
 
 
 class ReluLayer(Layer):
