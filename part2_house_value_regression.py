@@ -429,14 +429,15 @@ def example_main():
 
         error_train.append(regressor.score(x_train, y_train))
         error_validation.append(regressor.score(x_val, y_val))
-        # regressor.plot_losses()
+        #regressor.plot_losses()
 
     save_regressor(regressor.model)
 
     # Error on test set
     print("\nTrain mean regressor error: {}\n".format(np.mean(np.array(error_train))))
     print("\nValidation mean regressor error: {}\n".format(np.mean(np.array(error_validation))))
-
+    error_test = regressor.score(x_test, y_test)
+    print("\nTest regressor error: {}\n".format(error_test))
 
 
 if __name__ == "__main__":
