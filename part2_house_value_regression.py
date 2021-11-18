@@ -1,3 +1,5 @@
+import copy
+
 import matplotlib.pyplot as plt
 import sklearn.impute
 import torch
@@ -10,6 +12,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import cross_val_score
 from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor
@@ -18,6 +21,70 @@ import torch
 import torch.nn as nn
 
 pd.options.mode.chained_assignment = None  # default='warn'
+
+import numpy as np
+from numpy.random import default_rng
+
+
+class CrossValidation:
+
+    def __init__(self):
+        seed = 60012  # set random seed to obtain reproducible results
+        rg = default_rng(seed)
+        self.folds = None
+        self.random_generator = rg
+
+    def k_fold_split(self, x, y):
+        """ Split n_instances into n mutually exclusive splits at random.
+
+        Args:
+            n_splits (int): Number of splits
+            n_instances (int): Number of instances to split
+            random_generator (np.random.Generator): A random generator
+
+        Returns:
+            list: a list (length n_splits). Each element in the list should contain a
+                numpy array giving the indices of the instances in that split.
+        """
+
+        # generate a random permutation of indices from 0 to n_instances
+        shuffled_indices = self.random_generator.permutation(len(x))
+
+        # split shuffled indices into almost equal sized splits
+        split_indices = np.array_split(shuffled_indices, self.folds)
+
+        return split_indices
+
+    def train_test_k_fold(self, x, y):
+        """ Generate train and test indices at each fold.
+
+        Args:
+            n_folds (int): Number of folds
+            n_instances (int): Total number of instances
+            random_generator (np.random.Generator): A random generator
+
+        Returns:
+            list: a list of length n_folds. Each element in the list is a list (or tuple)
+                with two elements: a numpy array containing the train indices, and another
+                numpy array containing the test indices.
+        """
+
+        # split the dataset into k splits
+        split_indices = self.k_fold_split(x, y)
+
+        folds = []
+        for k in range(self.folds):
+            # pick k as test
+            test_indices = split_indices[k]
+
+            # combine remaining splits as train
+            # this solution is fancy and worked for me
+            # feel free to use a more verbose solution that's more readable
+            train_indices = np.hstack(split_indices[:k] + split_indices[k + 1:])
+
+            folds.append([train_indices, test_indices])
+
+        return folds
 
 class Net(nn.Module):
     def __init__(self, D_in, D_out, H1=400, H2=150, H3=50):
@@ -258,6 +325,9 @@ class Regressor():
 
         X, Y = self._preprocessor(x, y=y, training=False)  # Do not forget
         Y_pred = self.predict(X)
+        Y_pred_copy = copy.deepcopy(Y_pred)
+        Y_pred = Y_pred[~torch.isnan(Y_pred_copy)]
+        Y = Y[~torch.isnan(Y_pred_copy)]
         mean_absolute_error = sklearn.metrics.mean_absolute_error(Y, Y_pred)
         return mean_absolute_error
 
@@ -331,39 +401,41 @@ def example_main():
     data = pd.read_csv("housing.csv")
 
     # options for train test split
-    #bins = 5
-    #sale_price_bins = pd.qcut(
-    #    data[output_label], q=bins, labels=list(range(bins)))
-    #x_train, x_test, y_train, y_test = train_test_split(
-    #    data.drop(columns=output_label),
-    #    data[output_label],
-    #    random_state=12,
-    #    stratify=sale_price_bins)
-
-    x_train, x_test, y_train, y_test = train_test_split(
+    x_train_val, x_test, y_train_val, y_test = train_test_split(
         data.drop(columns=output_label),
         data[output_label],
-        test_size=0.33, random_state=42)
+        test_size=0.20, random_state=42)
 
-    # Spliting input and output
-    #x_train = data.loc[:, data.columns != output_label]
-    #y_train = data.loc[:, [output_label]]
+    # cross validation
+    # Pre-split data for inner cross-validation (9 inner folds)
+    x_train_val = pd.DataFrame(x_train_val.values, columns=list(x_train_val.columns))
+    y_train_val = pd.DataFrame(y_train_val.values)
+    cv = CrossValidation()
+    cv.folds = 9
+    splits = cv.train_test_k_fold(x_train_val, y_train_val)
+    error_train = []
+    error_validation = []
+    for j, (train_indices, val_indices) in enumerate(splits):
+        print("Inner Fold #", j)
+        # retrieve training and validation sets from random indices (splits)
+        x_train = x_train_val.loc[list(train_indices)]
+        y_train = y_train_val.loc[list(train_indices)]
+        x_val = x_train_val.loc[list(val_indices)]
+        y_val = y_train_val.loc[list(val_indices)]
 
-    # Training
-    # This example trains on the whole available dataset.
-    # You probably want to separate some held-out data
-    # to make sure the model isn't overfitting
-    regressor = Regressor(x_train, nb_epoch=100)
-    regressor.fit(x_train, y_train, x_test, y_test)
+        # fit regressor
+        regressor = Regressor(x_train, nb_epoch=100)
+        regressor.fit(x_train, y_train, x_val, y_val)
 
-    regressor.plot_losses()
+        error_train.append(regressor.score(x_train, y_train))
+        error_validation.append(regressor.score(x_val, y_val))
+        # regressor.plot_losses()
+
     save_regressor(regressor.model)
 
     # Error on test set
-    error_train = regressor.score(x_train, y_train)
-    print("\nTrain regressor error: {}\n".format(error_train))
-    error_test = regressor.score(x_test, y_test)
-    print("\nTest regressor error: {}\n".format(error_test))
+    print("\nTrain mean regressor error: {}\n".format(np.mean(np.array(error_train))))
+    print("\nValidation mean regressor error: {}\n".format(np.mean(np.array(error_validation))))
 
 
 
