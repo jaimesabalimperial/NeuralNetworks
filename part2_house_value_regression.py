@@ -17,9 +17,10 @@ from sklearn import metrics
 import torch
 import torch.nn as nn
 
+pd.options.mode.chained_assignment = None  # default='warn'
 
 class Net(nn.Module):
-    def __init__(self, D_in, D_out, H1=300, H2=100, H3=50):
+    def __init__(self, D_in, D_out, H1=400, H2=150, H3=50):
         super(Net, self).__init__()
 
         self.linear1 = nn.Linear(D_in, H1)
@@ -27,11 +28,14 @@ class Net(nn.Module):
         self.linear3 = nn.Linear(H2, H3)
         self.linear4 = nn.Linear(H3, D_out)
         self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(0.1)
 
     def forward(self, x):
         y_pred = self.relu(self.linear1(x).clamp(min=0))
         y_pred = self.relu(self.linear2(y_pred).clamp(min=0))
+        y_pred = self.dropout(y_pred)
         y_pred = self.relu(self.linear3(y_pred).clamp(min=0))
+        y_pred = self.dropout(y_pred)
         y_pred = self.linear4(y_pred)
         return y_pred
 
@@ -66,6 +70,7 @@ class Regressor():
         self.data_mean = None
         self.model = None
         self.losses = None
+        self.losses_val = None
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -130,12 +135,10 @@ class Regressor():
             x.fillna(self.data_mean, inplace=True)
 
             # encode non-numerate features if it wasn't encoded before
-            try:
+            if x["ocean_proximity"].dtype != 'int64':
                 x["ocean_proximity"] = self.labelEncoder.transform(x["ocean_proximity"])
                 x["ocean_proximity"].value_counts()
                 x.describe()
-            except ValueError:
-                pass
 
             # Standardize test data
             x = self.independent_scaler.transform(x)
@@ -154,7 +157,7 @@ class Regressor():
         #                       ** END OF YOUR CODE **
         #######################################################################
 
-    def fit(self, x, y):
+    def fit(self, x, y, x_val, y_val):
         """
         Regressor training function
 
@@ -173,24 +176,34 @@ class Regressor():
         #######################################################################
 
         X, Y = self._preprocessor(x, y=y, training=True)  # Do not forget
+        X_val, Y_val = self._preprocessor(x_val, y=y_val, training=False)  # Do not forget
         regressor = Net(self.input_size, self.output_size)
         loss_func = nn.MSELoss(reduction='sum')
         optimizer = torch.optim.Adam(regressor.parameters(), lr=1e-1)
 
         # train the model with nb_epoch epochs and present the loss for each epoch
         losses = []
+        losses_val = []
         for t in range(self.nb_epoch):
+            # training loss
             prediction = regressor(X)  # input x and predict based on x
-            loss = loss_func(prediction, Y)  # must be (1. nn output, 2. target)
-            losses.append(loss.item())
-            print(f'epoch {t} finished with training loss: {loss}.')
-            if torch.isnan(loss):
+            loss_train = loss_func(prediction, Y)  # must be (1. nn output, 2. target)
+            losses.append(loss_train.item())
+            print(f'epoch {t} finished with training loss: {loss_train}.')
+
+            # validation loss
+            val_prediction = regressor(X_val)
+            loss_val = loss_func(val_prediction, Y_val)
+            losses_val.append(loss_val.item())
+
+            if torch.isnan(loss_train):
                 break
             optimizer.zero_grad()  # clear gradients for next train
-            loss.backward()  # backpropagation, compute gradients
+            loss_train.backward()  # backpropagation, compute gradients
             optimizer.step()  # apply gradients
 
         self.losses = losses
+        self.losses_val = losses_val
         self.model = regressor
         return regressor
 
@@ -256,8 +269,10 @@ class Regressor():
         plt.figure()
         plt.grid()
         plt.plot(np.linspace(0, len(self.losses), len(self.losses)), self.losses)
+        plt.plot(np.linspace(0, len(self.losses_val), len(self.losses_val)), self.losses_val)
         plt.xlabel("Epoch")
         plt.ylabel("MSE Loss")
+        plt.legend(['train loss', 'validation loss'])
         plt.show()
 
 
@@ -339,16 +354,17 @@ def example_main():
     # You probably want to separate some held-out data
     # to make sure the model isn't overfitting
     regressor = Regressor(x_train, nb_epoch=100)
-    regressor.fit(x_train, y_train)
+    regressor.fit(x_train, y_train, x_test, y_test)
 
     regressor.plot_losses()
     save_regressor(regressor.model)
 
     # Error on test set
-    error = regressor.score(x_test, y_test)
-    print("\nTest regressor error: {}\n".format(error))
-    # error = regressor.score(x_test, y_test)
-    # print("\nTest regressor error: {}\n".format(error))
+    error_train = regressor.score(x_train, y_train)
+    print("\nTrain regressor error: {}\n".format(error_train))
+    error_test = regressor.score(x_test, y_test)
+    print("\nTest regressor error: {}\n".format(error_test))
+
 
 
 if __name__ == "__main__":
