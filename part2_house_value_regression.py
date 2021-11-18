@@ -99,8 +99,8 @@ class Regressor():
             print("Columns names are \n {}".format(x.columns))
 
             # Impute the missing values in the data set
-            self.data_mean = x.mean()
-            x.fillna(x.mean(), inplace=True)
+            self.data_mean = x.mean(numeric_only=True)
+            x.fillna(x.mean(numeric_only=True), inplace=True)
 
             # Label encode for categorical feature (ocean_proximity)
             print(x.dtypes)
