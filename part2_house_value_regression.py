@@ -107,9 +107,9 @@ class Net(nn.Module):
         return y_pred
 
 
-class Regressor():
+class Regressor(torch.nn.Module):
 
-    def __init__(self, x, nb_epoch=1000):
+    def __init__(self, x, nb_epoch=1000, nodes_h_layers=[10,10], activation="relu", lr=0.01, dropout=0):
         # You can add any input parameters you need
         # Remember to set them with a default value for LabTS tests
         """
@@ -126,18 +126,45 @@ class Regressor():
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-
-        # Replace this code with your own
-        # X, _ = self._preprocessor(x, training=True)
-        self.input_size = x.shape[1]
+        super(Regressor, self).__init__()
+        X, _ = self._preprocessor(x, training=True)
+        self.input_size = X.shape[1]
         self.output_size = 1
         self.nb_epoch = nb_epoch
-        self.independent_scaler = None
-        self.labelEncoder = None
-        self.data_mean = None
-        self.model = None
-        self.losses = None
-        self.losses_val = None
+        self.nodes_h_layer = nodes_h_layers
+        activations = {"tanh": torch.nn.Tanh(), "relu": torch.nn.ReLU(True)}}
+        self.activation = activations[activation]
+        self.layers = []
+        self.lr = lr
+        self.dropout=dropout
+
+       
+        if len(self.nodes_h_layer) == 0:
+            self.layer_1 = torch.nn.Linear(in_features=self.input_size, out_features=self.output_size)
+            self.layers += [self.layer_1]
+        else:
+            i = 0
+            structure = [self.input_size] + self.nodes_h_layer + [self.output_size]
+            # set attributes layer_i according to inputs
+            while i <= (len(structure)):
+                name = "layer_" + str(i+1)
+                setattr(self, name, torch.nn.Linear(in_features=structure[i], out_features=structure[i + 1]))
+                self.layers += [getattr(self, name)]
+                # add activation functions and dropouts
+                if i < (len(structure) - 2) and activation is not None:
+                    self.layers += [self.activation]
+                    self.layers += [torch.nn.Dropout(p=self.dropout)]
+                i += 1
+
+        self.model = torch.nn.Sequential(*self.layers)
+        self.optimiser = torch.optim.Adam(self.parameters(), lr=self.lr)
+        
+        # self.independent_scaler = None
+        # self.labelEncoder = None
+        # self.data_mean = None
+        # self.model = None
+        # self.losses = None
+        # self.losses_val = None
 
         #######################################################################
         #                       ** END OF YOUR CODE **
