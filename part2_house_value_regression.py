@@ -146,7 +146,7 @@ class Regressor(torch.nn.Module):
             i = 0
             structure = [self.input_size] + self.nodes_h_layer + [self.output_size]
             # set attributes layer_i according to inputs
-            while i <= (len(structure)):
+            while i < (len(structure)-1):
                 name = "layer_" + str(i+1)
                 setattr(self, name, torch.nn.Linear(in_features=structure[i], out_features=structure[i + 1]))
                 self.layers += [getattr(self, name)]
@@ -157,14 +157,14 @@ class Regressor(torch.nn.Module):
                 i += 1
 
         self.model = torch.nn.Sequential(*self.layers)
-        self.optimiser = torch.optim.Adam(self.parameters(), lr=self.lr)
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
+
         
-        # self.independent_scaler = None
-        # self.labelEncoder = None
-        # self.data_mean = None
-        # self.model = None
-        # self.losses = None
-        # self.losses_val = None
+        self.independent_scaler = None
+        self.labelEncoder = None
+        self.data_mean = None
+        self.losses = None
+        self.losses_val = None
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -251,6 +251,10 @@ class Regressor(torch.nn.Module):
         #                       ** END OF YOUR CODE **
         #######################################################################
 
+    def forward(self, x):
+        x = nn.Flatten()
+        return self.model(x)
+
     def fit(self, x, y, x_val, y_val):
         """
         Regressor training function
@@ -269,37 +273,58 @@ class Regressor(torch.nn.Module):
         #                       ** START OF YOUR CODE **
         #######################################################################
 
-        X, Y = self._preprocessor(x, y=y, training=True)  # Do not forget
+        X, Y = self._preprocessor(x, y=y, training=True)  # Do not forget  
         X_val, Y_val = self._preprocessor(x_val, y=y_val, training=False)  # Do not forget
-        regressor = Net(self.input_size, self.output_size)
-        loss_func = nn.MSELoss(reduction='sum')
-        optimizer = torch.optim.Adam(regressor.parameters(), lr=1e-1)
-
         # train the model with nb_epoch epochs and present the loss for each epoch
         losses = []
         losses_val = []
+        loss_func = nn.MSELoss(reduction='sum')
         for t in range(self.nb_epoch):
             # training loss
-            prediction = regressor(X)  # input x and predict based on x
+            prediction = self.forward(X)  # input x and predict based on x
             loss_train = loss_func(prediction, Y)  # must be (1. nn output, 2. target)
             losses.append(loss_train.item())
             print(f'epoch {t} finished with training loss: {loss_train}.')
+            self.optimizer.zero_grad()
+            loss_train.backward()
+            self.optimizer.step()
 
             # validation loss
-            val_prediction = regressor(X_val)
+            val_prediction = self.forward(X_val)
             loss_val = loss_func(val_prediction, Y_val)
             losses_val.append(loss_val.item())
-
-            if torch.isnan(loss_train):
-                break
-            optimizer.zero_grad()  # clear gradients for next train
-            loss_train.backward()  # backpropagation, compute gradients
-            optimizer.step()  # apply gradients
-
+        
         self.losses = losses
         self.losses_val = losses_val
-        self.model = regressor
-        return regressor
+        # regressor = Net(self.input_size, self.output_size)
+        # loss_func = nn.MSELoss(reduction='sum')
+        # optimizer = torch.optim.Adam(regressor.parameters(), lr=1e-1)
+
+        # # train the model with nb_epoch epochs and present the loss for each epoch
+        # losses = []
+        # losses_val = []
+        # for t in range(self.nb_epoch):
+        #     # training loss
+        #     prediction = regressor(X)  # input x and predict based on x
+        #     loss_train = loss_func(prediction, Y)  # must be (1. nn output, 2. target)
+        #     losses.append(loss_train.item())
+        #     print(f'epoch {t} finished with training loss: {loss_train}.')
+
+        #     # validation loss
+        #     val_prediction = regressor(X_val)
+        #     loss_val = loss_func(val_prediction, Y_val)
+        #     losses_val.append(loss_val.item())
+
+        #     if torch.isnan(loss_train):
+        #         break
+        #     optimizer.zero_grad()  # clear gradients for next train
+        #     loss_train.backward()  # backpropagation, compute gradients
+        #     optimizer.step()  # apply gradients
+
+        # self.losses = losses
+        # self.losses_val = losses_val
+        # self.model = regressor
+        return self.model
 
         #######################################################################
         #                       ** END OF YOUR CODE **
