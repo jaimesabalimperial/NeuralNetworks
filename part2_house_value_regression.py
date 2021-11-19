@@ -132,7 +132,7 @@ class Regressor(torch.nn.Module):
         self.output_size = 1
         self.nb_epoch = nb_epoch
         self.nodes_h_layer = nodes_h_layers
-        activations = {"tanh": torch.nn.Tanh(), "relu": torch.nn.ReLU(True)}}
+        activations = {"tanh": torch.nn.Tanh(), "relu": torch.nn.ReLU(True)}
         self.activation = activations[activation]
         self.layers = []
         self.lr = lr
