@@ -86,26 +86,6 @@ class CrossValidation:
 
         return folds
 
-class Net(nn.Module):
-    def __init__(self, D_in, D_out, H1=400, H2=150, H3=50):
-        super(Net, self).__init__()
-
-        self.linear1 = nn.Linear(D_in, H1)
-        self.linear2 = nn.Linear(H1, H2)
-        self.linear3 = nn.Linear(H2, H3)
-        self.linear4 = nn.Linear(H3, D_out)
-        self.relu = nn.ReLU()
-        self.dropout = nn.Dropout(0.1)
-
-    def forward(self, x):
-        y_pred = self.relu(self.linear1(x).clamp(min=0))
-        y_pred = self.relu(self.linear2(y_pred).clamp(min=0))
-        y_pred = self.dropout(y_pred)
-        y_pred = self.relu(self.linear3(y_pred).clamp(min=0))
-        y_pred = self.dropout(y_pred)
-        y_pred = self.linear4(y_pred)
-        return y_pred
-
 
 class Regressor(torch.nn.Module):
 
@@ -128,6 +108,7 @@ class Regressor(torch.nn.Module):
         #######################################################################
         super(Regressor, self).__init__()
         X, _ = self._preprocessor(x, training=True)
+
         self.input_size = X.shape[1]
         self.output_size = 1
         self.nb_epoch = nb_epoch
@@ -157,7 +138,6 @@ class Regressor(torch.nn.Module):
                 i += 1
 
         self.model = torch.nn.Sequential(*self.layers)
-        print(self.model)
         self.optimiser = torch.optim.Adam(self.parameters(), lr=self.lr)  
         self.scaler = None
         self.labelEncoder = None
@@ -199,17 +179,17 @@ class Regressor(torch.nn.Module):
         #######################################################################
         if training:
             # presenting statistics of the data
-            print("The number of rows and colums are {} and also called shape of the matrix".format(x.shape))
-            print("Columns names are \n {}".format(x.columns))
+            #print("The number of rows and colums are {} and also called shape of the matrix".format(x.shape))
+            #print("Columns names are \n {}".format(x.columns))
 
             # Impute the missing values in the data set
             self.data_mean = x.mean(numeric_only=True)
             x.fillna(x.mean(numeric_only=True), inplace=True)
-
-            # Label encode for categorical feature (ocean_proximity)
-            print(x.dtypes)
+                
+            # Label encode for label features
+            #print(x.dtypes)
             labelEncoder = LabelEncoder()
-            print(x["ocean_proximity"].value_counts())
+            #print(x["ocean_proximity"].value_counts())
             x["ocean_proximity"] = labelEncoder.fit_transform(x["ocean_proximity"])
             self.labelEncoder = labelEncoder
             x["ocean_proximity"].value_counts()
@@ -230,14 +210,13 @@ class Regressor(torch.nn.Module):
 
         # if test\validation, use the stored parameters
         else:
-            # Impute the missing values in the data set
+            #Impute the missing values in the data set
             x.fillna(self.data_mean, inplace=True)
 
             # encode non-numerate features if it wasn't encoded before
-            if x["ocean_proximity"].dtype != 'int64':
-                x["ocean_proximity"] = self.labelEncoder.transform(x["ocean_proximity"])
-                x["ocean_proximity"].value_counts()
-                x.describe()
+            x["ocean_proximity"] = x["ocean_proximity"].map(lambda s: -1 if s not in self.labelEncoder.classes_ else s)
+            self.labelEncoder.classes_ = np.append(self.labelEncoder.classes_, -1)
+            x["ocean_proximity"] = self.labelEncoder.transform(x["ocean_proximity"])
 
             # Standardize test data
             x = self.independent_scaler.transform(x)
@@ -252,13 +231,13 @@ class Regressor(torch.nn.Module):
         # Return preprocessed x and y, return None for y if it was None
         return x, y
 
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
 
     def forward(self, x):
-        x = nn.Flatten()
-        return self.model(x)
+        for layer in self.layers:
+            output = layer(x)
+            x = output
+            
+        return output 
 
     def fit(self, x, y):
         """
