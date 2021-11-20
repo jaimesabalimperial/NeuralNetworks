@@ -122,12 +122,6 @@ class Regressor():
             x = independent_scaler.fit_transform(x)
             self.independent_scaler = independent_scaler
 
-            # convert data frame to tensor for the NN
-            x = torch.tensor(x, dtype=torch.float)
-            if y is not None:
-                y = torch.tensor(y.values, dtype=torch.float)
-                new_shape = (len(y), 1)
-                y = y.view(new_shape)
 
         # if test\validation, use the stored parameters
         else:
@@ -142,13 +136,6 @@ class Regressor():
 
             # Standardize test data
             x = self.independent_scaler.transform(x)
-
-            # convert data frame to tensor for the NN
-            x = torch.tensor(x, dtype=torch.float)
-            if y is not None:
-                y = torch.tensor(y.values, dtype=torch.float)
-                new_shape = (len(y), 1)
-                y = y.view(new_shape)
 
         # Return preprocessed x and y, return None for y if it was None
         return x, y
@@ -176,7 +163,15 @@ class Regressor():
         #######################################################################
 
         X, Y = self._preprocessor(x, y=y, training=True)  # Do not forget
+        X = torch.tensor(X, dtype=torch.float)
+        Y = torch.tensor(Y.values, dtype=torch.float)
+        new_shape = (len(Y), 1)
+        Y = Y.view(new_shape)
         X_val, Y_val = self._preprocessor(x_val, y=y_val, training=False)  # Do not forget
+        X_val = torch.tensor(X_val, dtype=torch.float)
+        Y_val = torch.tensor(Y_val.values, dtype=torch.float)
+        new_shape = (len(Y_val), 1)
+        Y_val = Y_val.view(new_shape)
         regressor = Net(self.input_size, self.output_size)
         loss_func = nn.MSELoss(reduction='sum')
         optimizer = torch.optim.Adam(regressor.parameters(), lr=1e-1)
@@ -228,11 +223,12 @@ class Regressor():
         #                       ** START OF YOUR CODE **
         #######################################################################
 
-        # X, _ = self._preprocessor(x, training=False)  # I am not sure if needed here
+        X, _ = self._preprocessor(x, training=False)  # I am not sure if needed here
+        X = torch.tensor(X, dtype=torch.float)
         with torch.no_grad():
             saved_model = load_regressor()
-            prediction = saved_model(x)
-        return prediction
+            prediction = saved_model(X)
+        return np.array(prediction)
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -256,10 +252,9 @@ class Regressor():
         #                       ** START OF YOUR CODE **
         #######################################################################
 
-        X, Y = self._preprocessor(x, y=y, training=False)  # Do not forget
-        Y_pred = self.predict(X)
-        mean_absolute_error = sklearn.metrics.mean_absolute_error(Y, Y_pred)
-        return mean_absolute_error
+        Y_pred = self.predict(x)
+        sqrt_error = np.sqrt(sklearn.metrics.mean_squared_error(y, Y_pred))
+        return sqrt_error
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -343,7 +338,7 @@ def example_main():
     x_train, x_test, y_train, y_test = train_test_split(
         data.drop(columns=output_label),
         data[output_label],
-        test_size=0.33, random_state=42)
+        test_size=0.2, random_state=42)
 
     # Spliting input and output
     #x_train = data.loc[:, data.columns != output_label]
@@ -355,7 +350,8 @@ def example_main():
     # to make sure the model isn't overfitting
     regressor = Regressor(x_train, nb_epoch=100)
     regressor.fit(x_train, y_train, x_test, y_test)
-
+    Y_pred = regressor.predict(x_test)
+    sqrt_error = np.sqrt(sklearn.metrics.mean_squared_error(y_test, Y_pred))
     regressor.plot_losses()
     save_regressor(regressor.model)
 
