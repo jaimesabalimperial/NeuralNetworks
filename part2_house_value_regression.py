@@ -389,7 +389,7 @@ def example_main():
         test_size=0.20, random_state=42)
 
     # fit regressor
-    regressor = Regressor(x_train, nb_epoch=100, nodes_h_layers=[300, 350, 50], activation="relu", lr=0.01, dropout=0.2)
+    regressor = Regressor(x_train, nb_epoch=100, nodes_h_layers=[400, 150, 50], activation="relu", lr=0.01, dropout=0.1)
     regressor.fit(x_train, y_train)
     # y_pred = regressor.predict(x_test)
     # sqrt_error = np.sqrt(sklearn.metrics.mean_squared_error(y_test, y_pred))
