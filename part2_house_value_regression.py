@@ -138,6 +138,7 @@ class Regressor(torch.nn.Module):
                 i += 1
 
         self.model = torch.nn.Sequential(*self.layers)
+        print(self.model)
         self.optimiser = torch.optim.Adam(self.parameters(), lr=self.lr)  
         self.scaler = None
         self.labelEncoder = None
@@ -242,7 +243,6 @@ class Regressor(torch.nn.Module):
         Y = Y.view(new_shape)
 
         loss_func = nn.MSELoss()
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
 
         #train the model with nb_epoch epochs and present the loss for each epoch
         losses = []
@@ -250,12 +250,12 @@ class Regressor(torch.nn.Module):
             #training loss
             prediction = self.forward(X)  # input x and predict based on x
             loss_train = loss_func(prediction, Y)  # must be (1. nn output, 2. target)
-            losses.append(loss_train.item())
+            losses.append(np.sqrt(loss_train.item())) #root mean squared error
             if torch.isnan(loss_train):
                 break
-            optimizer.zero_grad()  # clear gradients for next train
+            self.optimiser.zero_grad()  # clear gradients for next train
             loss_train.backward()  # backpropagation, compute gradients
-            optimizer.step()  # apply gradients
+            self.optimiser.step()  # apply gradients
             print(f'epoch {t+1} finished with training loss: {loss_train}.')
 
         self.losses = losses
@@ -311,14 +311,8 @@ class Regressor(torch.nn.Module):
         #######################################################################
 
         Y_pred = self.predict(x)
-
-        # remove nans in the prediction
-        '''Y_pred_copy = copy.deepcopy(Y_pred)
-        Y_pred = Y_pred[~torch.isnan(Y_pred_copy)]
-        Y = Y[~torch.isnan(Y_pred_copy)]'''
-
-        sqrt_error = np.sqrt(sklearn.metrics.mean_squared_error(y, Y_pred))
-        return sqrt_error
+        rmse = np.sqrt(sklearn.metrics.mean_squared_error(y, Y_pred))
+        return rmse
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -396,11 +390,11 @@ def example_main():
         test_size=0.20, random_state=42)
 
     # fit regressor
-    regressor = Regressor(x_train, nb_epoch=100, nodes_h_layers=[400,150,50], activation="relu", lr=0.01, dropout=0.1)
+    regressor = Regressor(x_train, nb_epoch=100, nodes_h_layers=[300,350,50], activation="relu", lr=0.01, dropout=0.2)
     regressor.fit(x_train, y_train)
-    y_pred = regressor.predict(x_test)
-    sqrt_error = np.sqrt(sklearn.metrics.mean_squared_error(y_test, y_pred))
-    print(sqrt_error)
+    #y_pred = regressor.predict(x_test)
+    #sqrt_error = np.sqrt(sklearn.metrics.mean_squared_error(y_test, y_pred))
+    #print(sqrt_error)
     test_err = regressor.score(x_test, y_test)
     print("\nTest regressor error: {}\n".format(test_err))
 
