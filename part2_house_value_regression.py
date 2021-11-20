@@ -256,6 +256,10 @@ class Regressor(torch.nn.Module):
         #                       ** END OF YOUR CODE **
         #######################################################################
 
+    def forward(self, x):
+        x = nn.Flatten()
+        return self.model(x)
+
     def fit(self, x, y):
         """
         Regressor training function
