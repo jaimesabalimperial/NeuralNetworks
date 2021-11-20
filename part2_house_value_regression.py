@@ -109,7 +109,7 @@ class Net(nn.Module):
 
 class Regressor(torch.nn.Module):
 
-    def __init__(self, x, nb_epoch=1000, nodes_h_layers=[10,10], activation="relu", lr=0.01, dropout=0):
+    def __init__(self, x, nb_epoch=100, nodes_h_layers=[400,150,50], activation="relu", lr=0.01, dropout=0.1):
         # You can add any input parameters you need
         # Remember to set them with a default value for LabTS tests
         """
@@ -132,7 +132,7 @@ class Regressor(torch.nn.Module):
         self.output_size = 1
         self.nb_epoch = nb_epoch
         self.nodes_h_layer = nodes_h_layers
-        activations = {"tanh": torch.nn.Tanh(), "relu": torch.nn.ReLU(True)}}
+        activations = {"tanh": torch.nn.Tanh(), "relu": torch.nn.ReLU(True)}
         self.activation = activations[activation]
         self.layers = []
         self.lr = lr
@@ -146,7 +146,7 @@ class Regressor(torch.nn.Module):
             i = 0
             structure = [self.input_size] + self.nodes_h_layer + [self.output_size]
             # set attributes layer_i according to inputs
-            while i <= (len(structure)):
+            while i < (len(structure)-1):
                 name = "layer_" + str(i+1)
                 setattr(self, name, torch.nn.Linear(in_features=structure[i], out_features=structure[i + 1]))
                 self.layers += [getattr(self, name)]
@@ -157,18 +157,23 @@ class Regressor(torch.nn.Module):
                 i += 1
 
         self.model = torch.nn.Sequential(*self.layers)
-        self.optimiser = torch.optim.Adam(self.parameters(), lr=self.lr)
-        
-        # self.independent_scaler = None
-        # self.labelEncoder = None
-        # self.data_mean = None
-        # self.model = None
-        # self.losses = None
-        # self.losses_val = None
+        print(self.model)
+        self.optimiser = torch.optim.Adam(self.parameters(), lr=self.lr)  
+        self.scaler = None
+        self.labelEncoder = None
+        self.data_mean = None
+        self.model = None
+        self.losses = None
 
+    def forward(self, x):
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
+        for layer in self.layers:
+            output = layer(x)
+            x = output
+            
+        return output 
 
     def _preprocessor(self, x, y=None, training=False):
         """
@@ -251,7 +256,7 @@ class Regressor(torch.nn.Module):
         #                       ** END OF YOUR CODE **
         #######################################################################
 
-    def fit(self, x, y, x_val, y_val):
+    def fit(self, x, y):
         """
         Regressor training function
 
@@ -268,42 +273,31 @@ class Regressor(torch.nn.Module):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-
         X, Y = self._preprocessor(x, y=y, training=True)  # Do not forget
-        X_val, Y_val = self._preprocessor(x_val, y=y_val, training=False)  # Do not forget
-        regressor = Net(self.input_size, self.output_size)
-        loss_func = nn.MSELoss(reduction='sum')
-        optimizer = torch.optim.Adam(regressor.parameters(), lr=1e-1)
+        loss_func = nn.MSELoss()
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
 
-        # train the model with nb_epoch epochs and present the loss for each epoch
+        #train the model with nb_epoch epochs and present the loss for each epoch
         losses = []
-        losses_val = []
         for t in range(self.nb_epoch):
-            # training loss
-            prediction = regressor(X)  # input x and predict based on x
+            #training loss
+            prediction = self.forward(X)  # input x and predict based on x
             loss_train = loss_func(prediction, Y)  # must be (1. nn output, 2. target)
             losses.append(loss_train.item())
-            print(f'epoch {t} finished with training loss: {loss_train}.')
-
-            # validation loss
-            val_prediction = regressor(X_val)
-            loss_val = loss_func(val_prediction, Y_val)
-            losses_val.append(loss_val.item())
-
             if torch.isnan(loss_train):
                 break
             optimizer.zero_grad()  # clear gradients for next train
             loss_train.backward()  # backpropagation, compute gradients
             optimizer.step()  # apply gradients
+            print(f'epoch {t+1} finished with training loss: {loss_train}.')
 
         self.losses = losses
-        self.losses_val = losses_val
-        self.model = regressor
-        return regressor
 
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
+
+    
 
     def predict(self, x):
         """
@@ -324,8 +318,7 @@ class Regressor(torch.nn.Module):
 
         # X, _ = self._preprocessor(x, training=False)  # I am not sure if needed here
         with torch.no_grad():
-            saved_model = load_regressor()
-            prediction = saved_model(x)
+            prediction = self.forward(x)
         return prediction
 
         #######################################################################
@@ -355,7 +348,7 @@ class Regressor(torch.nn.Module):
         Y_pred_copy = copy.deepcopy(Y_pred)
         Y_pred = Y_pred[~torch.isnan(Y_pred_copy)]
         Y = Y[~torch.isnan(Y_pred_copy)]
-        mean_absolute_error = sklearn.metrics.mean_absolute_error(Y, Y_pred)
+        mean_absolute_error = sklearn.metrics.mean_squared_error(Y, Y_pred)
         return mean_absolute_error
 
         #######################################################################
@@ -428,43 +421,20 @@ def example_main():
     data = pd.read_csv("housing.csv")
 
     # options for train test split
-    x_train_val, x_test, y_train_val, y_test = train_test_split(
+    x_train, x_test, y_train, y_test = train_test_split(
         data.drop(columns=output_label),
         data[output_label],
         test_size=0.20, random_state=42)
 
-    # cross validation
-    # Pre-split data for inner cross-validation (9 inner folds)
-    x_train_val = pd.DataFrame(x_train_val.values, columns=list(x_train_val.columns))
-    y_train_val = pd.DataFrame(y_train_val.values)
-    cv = CrossValidation()
-    cv.folds = 9
-    splits = cv.train_test_k_fold(x_train_val, y_train_val)
-    error_train = []
-    error_validation = []
-    for j, (train_indices, val_indices) in enumerate(splits):
-        print("Inner Fold #", j)
-        # retrieve training and validation sets from random indices (splits)
-        x_train = x_train_val.loc[list(train_indices)]
-        y_train = y_train_val.loc[list(train_indices)]
-        x_val = x_train_val.loc[list(val_indices)]
-        y_val = y_train_val.loc[list(val_indices)]
+    # fit regressor
+    regressor = Regressor(x_train, nb_epoch=100)
+    regressor.fit(x_train, y_train)
 
-        # fit regressor
-        regressor = Regressor(x_train, nb_epoch=100)
-        regressor.fit(x_train, y_train, x_val, y_val)
+    test_err = regressor.score(x_test, y_test)
+    print("\nTest regressor error: {}\n".format(test_err))
 
-        error_train.append(regressor.score(x_train, y_train))
-        error_validation.append(regressor.score(x_val, y_val))
-        #regressor.plot_losses()
-
-    save_regressor(regressor.model)
-
-    # Error on test set
-    print("\nTrain mean regressor error: {}\n".format(np.mean(np.array(error_train))))
-    print("\nValidation mean regressor error: {}\n".format(np.mean(np.array(error_validation))))
-    error_test = regressor.score(x_test, y_test)
-    print("\nTest regressor error: {}\n".format(error_test))
+    #regressor.plot_losses()
+    save_regressor(regressor)
 
 
 if __name__ == "__main__":
