@@ -1,3 +1,5 @@
+import copy
+
 import matplotlib.pyplot as plt
 import sklearn.impute
 import torch
@@ -10,6 +12,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import cross_val_score
 from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor
@@ -19,31 +22,74 @@ import torch.nn as nn
 
 pd.options.mode.chained_assignment = None  # default='warn'
 
-
-class Net(nn.Module):
-    def __init__(self, D_in, D_out, H1=400, H2=150, H3=50):
-        super(Net, self).__init__()
-
-        self.linear1 = nn.Linear(D_in, H1)
-        self.linear2 = nn.Linear(H1, H2)
-        self.linear3 = nn.Linear(H2, H3)
-        self.linear4 = nn.Linear(H3, D_out)
-        self.relu = nn.ReLU()
-        self.dropout = nn.Dropout(0.1)
-
-    def forward(self, x):
-        y_pred = self.relu(self.linear1(x).clamp(min=0))
-        y_pred = self.relu(self.linear2(y_pred).clamp(min=0))
-        y_pred = self.dropout(y_pred)
-        y_pred = self.relu(self.linear3(y_pred).clamp(min=0))
-        y_pred = self.dropout(y_pred)
-        y_pred = self.linear4(y_pred)
-        return y_pred
+import numpy as np
+from numpy.random import default_rng
 
 
-class Regressor():
+class CrossValidation:
 
-    def __init__(self, x, nb_epoch=1000):
+    def __init__(self):
+        seed = 60012  # set random seed to obtain reproducible results
+        rg = default_rng(seed)
+        self.folds = None
+        self.random_generator = rg
+
+    def k_fold_split(self, x, y):
+        """ Split n_instances into n mutually exclusive splits at random.
+
+        Args:
+            n_splits (int): Number of splits
+            n_instances (int): Number of instances to split
+            random_generator (np.random.Generator): A random generator
+
+        Returns:
+            list: a list (length n_splits). Each element in the list should contain a
+                numpy array giving the indices of the instances in that split.
+        """
+
+        # generate a random permutation of indices from 0 to n_instances
+        shuffled_indices = self.random_generator.permutation(len(x))
+
+        # split shuffled indices into almost equal sized splits
+        split_indices = np.array_split(shuffled_indices, self.folds)
+
+        return split_indices
+
+    def train_test_k_fold(self, x, y):
+        """ Generate train and test indices at each fold.
+
+        Args:
+            n_folds (int): Number of folds
+            n_instances (int): Total number of instances
+            random_generator (np.random.Generator): A random generator
+
+        Returns:
+            list: a list of length n_folds. Each element in the list is a list (or tuple)
+                with two elements: a numpy array containing the train indices, and another
+                numpy array containing the test indices.
+        """
+
+        # split the dataset into k splits
+        split_indices = self.k_fold_split(x, y)
+
+        folds = []
+        for k in range(self.folds):
+            # pick k as test
+            test_indices = split_indices[k]
+
+            # combine remaining splits as train
+            # this solution is fancy and worked for me
+            # feel free to use a more verbose solution that's more readable
+            train_indices = np.hstack(split_indices[:k] + split_indices[k + 1:])
+
+            folds.append([train_indices, test_indices])
+
+        return folds
+
+
+class Regressor(torch.nn.Module):
+
+    def __init__(self, x, nb_epoch=100, nodes_h_layers=[400, 150, 50], activation="relu", lr=0.01, dropout=0.1):
         # You can add any input parameters you need
         # Remember to set them with a default value for LabTS tests
         """
@@ -60,22 +106,54 @@ class Regressor():
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
+        super(Regressor, self).__init__()
+        X, _ = self._preprocessor(x, training=True)
 
-        # Replace this code with your own
-        # X, _ = self._preprocessor(x, training=True)
-        self.input_size = x.shape[1]
+        self.input_size = X.shape[1]
         self.output_size = 1
         self.nb_epoch = nb_epoch
-        self.independent_scaler = None
+        self.nodes_h_layer = nodes_h_layers
+        activations = {"tanh": torch.nn.Tanh(), "relu": torch.nn.ReLU(True)}
+        self.activation = activations[activation]
+        self.layers = []
+        self.lr = lr
+        self.dropout = dropout
+
+        if len(self.nodes_h_layer) == 0:
+            self.layer_1 = torch.nn.Linear(in_features=self.input_size, out_features=self.output_size)
+            self.layers += [self.layer_1]
+        else:
+            i = 0
+            structure = [self.input_size] + self.nodes_h_layer + [self.output_size]
+            # set attributes layer_i according to inputs
+            while i < (len(structure) - 1):
+                name = "layer_" + str(i + 1)
+                setattr(self, name, torch.nn.Linear(in_features=structure[i], out_features=structure[i + 1]))
+                self.layers += [getattr(self, name)]
+                # add activation functions and dropouts
+                if i < (len(structure) - 2) and activation is not None:
+                    self.layers += [self.activation]
+                    self.layers += [torch.nn.Dropout(p=self.dropout)]
+                i += 1
+
+        self.model = torch.nn.Sequential(*self.layers)
+        print(self.model)
+        self.optimiser = torch.optim.Adam(self.parameters(), lr=self.lr)
+        self.scaler = None
         self.labelEncoder = None
         self.data_mean = None
         self.model = None
         self.losses = None
-        self.losses_val = None
 
+    def forward(self, x):
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
+        for layer in self.layers:
+            output = layer(x)
+            x = output
+
+        return output
 
     def _preprocessor(self, x, y=None, training=False):
         """
@@ -101,17 +179,17 @@ class Regressor():
         #######################################################################
         if training:
             # presenting statistics of the data
-            print("The number of rows and colums are {} and also called shape of the matrix".format(x.shape))
-            print("Columns names are \n {}".format(x.columns))
+            # print("The number of rows and colums are {} and also called shape of the matrix".format(x.shape))
+            # print("Columns names are \n {}".format(x.columns))
 
             # Impute the missing values in the data set
             self.data_mean = x.mean(numeric_only=True)
             x.fillna(x.mean(numeric_only=True), inplace=True)
 
-            # Label encode for categorical feature (ocean_proximity)
-            print(x.dtypes)
+            # Label encode for label features
+            # print(x.dtypes)
             labelEncoder = LabelEncoder()
-            print(x["ocean_proximity"].value_counts())
+            # print(x["ocean_proximity"].value_counts())
             x["ocean_proximity"] = labelEncoder.fit_transform(x["ocean_proximity"])
             self.labelEncoder = labelEncoder
             x["ocean_proximity"].value_counts()
@@ -123,17 +201,15 @@ class Regressor():
             x = independent_scaler.fit_transform(x)
             self.independent_scaler = independent_scaler
 
-
         # if test\validation, use the stored parameters
         else:
             # Impute the missing values in the data set
             x.fillna(self.data_mean, inplace=True)
 
             # encode non-numerate features if it wasn't encoded before
-            if x["ocean_proximity"].dtype != 'int64':
-                x["ocean_proximity"] = self.labelEncoder.transform(x["ocean_proximity"])
-                x["ocean_proximity"].value_counts()
-                x.describe()
+            x["ocean_proximity"] = x["ocean_proximity"].map(lambda s: -1 if s not in self.labelEncoder.classes_ else s)
+            self.labelEncoder.classes_ = np.append(self.labelEncoder.classes_, -1)
+            x["ocean_proximity"] = self.labelEncoder.transform(x["ocean_proximity"])
 
             # Standardize test data
             x = self.independent_scaler.transform(x)
@@ -141,11 +217,7 @@ class Regressor():
         # Return preprocessed x and y, return None for y if it was None
         return x, y
 
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
-
-    def fit(self, x, y, x_val, y_val):
+    def fit(self, x, y):
         """
         Regressor training function
 
@@ -162,46 +234,30 @@ class Regressor():
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-
         X, Y = self._preprocessor(x, y=y, training=True)  # Do not forget
+        # convert data frame to tensor for the NN
         X = torch.tensor(X, dtype=torch.float)
         Y = torch.tensor(Y.values, dtype=torch.float)
         new_shape = (len(Y), 1)
         Y = Y.view(new_shape)
-        X_val, Y_val = self._preprocessor(x_val, y=y_val, training=False)  # Do not forget
-        X_val = torch.tensor(X_val, dtype=torch.float)
-        Y_val = torch.tensor(Y_val.values, dtype=torch.float)
-        new_shape = (len(Y_val), 1)
-        Y_val = Y_val.view(new_shape)
-        regressor = Net(self.input_size, self.output_size)
-        loss_func = nn.MSELoss(reduction='sum')
-        optimizer = torch.optim.Adam(regressor.parameters(), lr=1e-1)
+
+        loss_func = nn.MSELoss()
 
         # train the model with nb_epoch epochs and present the loss for each epoch
         losses = []
-        losses_val = []
         for t in range(self.nb_epoch):
             # training loss
-            prediction = regressor(X)  # input x and predict based on x
+            prediction = self.forward(X)  # input x and predict based on x
             loss_train = loss_func(prediction, Y)  # must be (1. nn output, 2. target)
-            losses.append(loss_train.item())
-            print(f'epoch {t} finished with training loss: {loss_train}.')
-
-            # validation loss
-            val_prediction = regressor(X_val)
-            loss_val = loss_func(val_prediction, Y_val)
-            losses_val.append(loss_val.item())
-
+            losses.append(np.sqrt(loss_train.item()))  # root mean squared error
             if torch.isnan(loss_train):
                 break
-            optimizer.zero_grad()  # clear gradients for next train
+            self.optimiser.zero_grad()  # clear gradients for next train
             loss_train.backward()  # backpropagation, compute gradients
-            optimizer.step()  # apply gradients
+            self.optimiser.step()  # apply gradients
+            print(f'epoch {t + 1} finished with training loss: {loss_train}.')
 
         self.losses = losses
-        self.losses_val = losses_val
-        self.model = regressor
-        return regressor
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -225,9 +281,10 @@ class Regressor():
         #######################################################################
 
         X, _ = self._preprocessor(x, training=False)  # I am not sure if needed here
+        # convert data frame to tensor for the NN
         X = torch.tensor(X, dtype=torch.float)
         with torch.no_grad():
-            prediction = self.model(X)
+            prediction = self.forward(X)
         return np.array(prediction)
 
         #######################################################################
@@ -253,8 +310,8 @@ class Regressor():
         #######################################################################
 
         Y_pred = self.predict(x)
-        sqrt_error = np.sqrt(sklearn.metrics.mean_squared_error(y, Y_pred))
-        return sqrt_error
+        rmse = np.sqrt(sklearn.metrics.mean_squared_error(y, Y_pred))
+        return rmse
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -326,41 +383,25 @@ def example_main():
     data = pd.read_csv("housing.csv")
 
     # options for train test split
-    # bins = 5
-    # sale_price_bins = pd.qcut(
-    #    data[output_label], q=bins, labels=list(range(bins)))
-    # x_train, x_test, y_train, y_test = train_test_split(
-    #    data.drop(columns=output_label),
-    #    data[output_label],
-    #    random_state=12,
-    #    stratify=sale_price_bins)
-
     x_train, x_test, y_train, y_test = train_test_split(
         data.drop(columns=output_label),
         data[output_label],
-        test_size=0.2, random_state=42)
+        test_size=0.20, random_state=42)
 
-    # Spliting input and output
-    # x_train = data.loc[:, data.columns != output_label]
-    # y_train = data.loc[:, [output_label]]
+    # fit regressor
+    regressor = Regressor(x_train, nb_epoch=100, nodes_h_layers=[300, 350, 50], activation="relu", lr=0.01, dropout=0.2)
+    regressor.fit(x_train, y_train)
+    # y_pred = regressor.predict(x_test)
+    # sqrt_error = np.sqrt(sklearn.metrics.mean_squared_error(y_test, y_pred))
+    # print(sqrt_error)
+    test_err = regressor.score(x_test, y_test)
+    print("\nTest regressor error: {}\n".format(test_err))
 
-    # Training
-    # This example trains on the whole available dataset.
-    # You probably want to separate some held-out data
-    # to make sure the model isn't overfitting
-    regressor = Regressor(x_train, nb_epoch=100)
-    regressor.fit(x_train, y_train, x_test, y_test)
-    regressor.predict(x_test)
-    regressor.plot_losses()
-    save_regressor(regressor.model)
+    # regressor.plot_losses()
+    save_regressor(regressor)
 
-    # Error on test set
-    error_train = regressor.score(x_train, y_train)
-    print("\nTrain regressor error: {}\n".format(error_train))
-    error_test = regressor.score(x_test, y_test)
-    print("\nTest regressor error: {}\n".format(error_test))
+    new_regressor = load_regressor()
 
 
 if __name__ == "__main__":
     example_main()
-
