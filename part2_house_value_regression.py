@@ -19,6 +19,7 @@ import torch.nn as nn
 
 pd.options.mode.chained_assignment = None  # default='warn'
 
+
 class Net(nn.Module):
     def __init__(self, D_in, D_out, H1=400, H2=150, H3=50):
         super(Net, self).__init__()
@@ -65,39 +66,7 @@ class Regressor():
         self.input_size = x.shape[1]
         self.output_size = 1
         self.nb_epoch = nb_epoch
-<<<<<<< HEAD
         self.independent_scaler = None
-=======
-        self.nodes_h_layer = nodes_h_layers
-        activations = {"tanh": torch.nn.Tanh(), "relu": torch.nn.ReLU(True)}
-        self.activation = activations[activation]
-        self.layers = []
-        self.lr = lr
-        self.dropout=dropout
-
-       
-        if len(self.nodes_h_layer) == 0:
-            self.layer_1 = torch.nn.Linear(in_features=self.input_size, out_features=self.output_size)
-            self.layers += [self.layer_1]
-        else:
-            i = 0
-            structure = [self.input_size] + self.nodes_h_layer + [self.output_size]
-            # set attributes layer_i according to inputs
-            while i < (len(structure)-1):
-                name = "layer_" + str(i+1)
-                setattr(self, name, torch.nn.Linear(in_features=structure[i], out_features=structure[i + 1]))
-                self.layers += [getattr(self, name)]
-                # add activation functions and dropouts
-                if i < (len(structure) - 2) and activation is not None:
-                    self.layers += [self.activation]
-                    self.layers += [torch.nn.Dropout(p=self.dropout)]
-                i += 1
-
-        self.model = torch.nn.Sequential(*self.layers)
-        print(self.model)
-        self.optimiser = torch.optim.Adam(self.parameters(), lr=self.lr)  
-        self.scaler = None
->>>>>>> f4e3162a55762e637f0a74071d8e81b8bb48fc4a
         self.labelEncoder = None
         self.data_mean = None
         self.model = None
@@ -199,7 +168,6 @@ class Regressor():
         Y = torch.tensor(Y.values, dtype=torch.float)
         new_shape = (len(Y), 1)
         Y = Y.view(new_shape)
-<<<<<<< HEAD
         X_val, Y_val = self._preprocessor(x_val, y=y_val, training=False)  # Do not forget
         X_val = torch.tensor(X_val, dtype=torch.float)
         Y_val = torch.tensor(Y_val.values, dtype=torch.float)
@@ -210,19 +178,12 @@ class Regressor():
         optimizer = torch.optim.Adam(regressor.parameters(), lr=1e-1)
 
         # train the model with nb_epoch epochs and present the loss for each epoch
-=======
-
-        loss_func = nn.MSELoss()
-
-        #train the model with nb_epoch epochs and present the loss for each epoch
->>>>>>> f4e3162a55762e637f0a74071d8e81b8bb48fc4a
         losses = []
         losses_val = []
         for t in range(self.nb_epoch):
             # training loss
             prediction = regressor(X)  # input x and predict based on x
             loss_train = loss_func(prediction, Y)  # must be (1. nn output, 2. target)
-<<<<<<< HEAD
             losses.append(loss_train.item())
             print(f'epoch {t} finished with training loss: {loss_train}.')
 
@@ -231,19 +192,11 @@ class Regressor():
             loss_val = loss_func(val_prediction, Y_val)
             losses_val.append(loss_val.item())
 
-=======
-            losses.append(np.sqrt(loss_train.item())) #root mean squared error
->>>>>>> f4e3162a55762e637f0a74071d8e81b8bb48fc4a
             if torch.isnan(loss_train):
                 break
-            self.optimiser.zero_grad()  # clear gradients for next train
+            optimizer.zero_grad()  # clear gradients for next train
             loss_train.backward()  # backpropagation, compute gradients
-<<<<<<< HEAD
             optimizer.step()  # apply gradients
-=======
-            self.optimiser.step()  # apply gradients
-            print(f'epoch {t+1} finished with training loss: {loss_train}.')
->>>>>>> f4e3162a55762e637f0a74071d8e81b8bb48fc4a
 
         self.losses = losses
         self.losses_val = losses_val
@@ -300,18 +253,13 @@ class Regressor():
         #######################################################################
 
         Y_pred = self.predict(x)
-<<<<<<< HEAD
         sqrt_error = np.sqrt(sklearn.metrics.mean_squared_error(y, Y_pred))
         return sqrt_error
-=======
-        rmse = np.sqrt(sklearn.metrics.mean_squared_error(y, Y_pred))
-        return rmse
->>>>>>> f4e3162a55762e637f0a74071d8e81b8bb48fc4a
 
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
-    
+
     def plot_losses(self):
         plt.figure()
         plt.grid()
@@ -378,10 +326,10 @@ def example_main():
     data = pd.read_csv("housing.csv")
 
     # options for train test split
-    #bins = 5
-    #sale_price_bins = pd.qcut(
+    # bins = 5
+    # sale_price_bins = pd.qcut(
     #    data[output_label], q=bins, labels=list(range(bins)))
-    #x_train, x_test, y_train, y_test = train_test_split(
+    # x_train, x_test, y_train, y_test = train_test_split(
     #    data.drop(columns=output_label),
     #    data[output_label],
     #    random_state=12,
@@ -390,12 +338,11 @@ def example_main():
     x_train, x_test, y_train, y_test = train_test_split(
         data.drop(columns=output_label),
         data[output_label],
-<<<<<<< HEAD
         test_size=0.2, random_state=42)
 
     # Spliting input and output
-    #x_train = data.loc[:, data.columns != output_label]
-    #y_train = data.loc[:, [output_label]]
+    # x_train = data.loc[:, data.columns != output_label]
+    # y_train = data.loc[:, [output_label]]
 
     # Training
     # This example trains on the whole available dataset.
@@ -412,24 +359,6 @@ def example_main():
     print("\nTrain regressor error: {}\n".format(error_train))
     error_test = regressor.score(x_test, y_test)
     print("\nTest regressor error: {}\n".format(error_test))
-=======
-        test_size=0.20, random_state=42)
-
-    # fit regressor
-    regressor = Regressor(x_train, nb_epoch=100, nodes_h_layers=[300,350,50], activation="relu", lr=0.01, dropout=0.2)
-    regressor.fit(x_train, y_train)
-    #y_pred = regressor.predict(x_test)
-    #sqrt_error = np.sqrt(sklearn.metrics.mean_squared_error(y_test, y_pred))
-    #print(sqrt_error)
-    test_err = regressor.score(x_test, y_test)
-    print("\nTest regressor error: {}\n".format(test_err))
-
-    #regressor.plot_losses()
-    save_regressor(regressor)
-
-    new_regressor = load_regressor()
->>>>>>> f4e3162a55762e637f0a74071d8e81b8bb48fc4a
-
 
 
 if __name__ == "__main__":
