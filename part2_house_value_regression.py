@@ -226,8 +226,7 @@ class Regressor():
         X, _ = self._preprocessor(x, training=False)  # I am not sure if needed here
         X = torch.tensor(X, dtype=torch.float)
         with torch.no_grad():
-            saved_model = load_regressor()
-            prediction = saved_model(X)
+            prediction = self.model(X)
         return np.array(prediction)
 
         #######################################################################
@@ -350,8 +349,7 @@ def example_main():
     # to make sure the model isn't overfitting
     regressor = Regressor(x_train, nb_epoch=100)
     regressor.fit(x_train, y_train, x_test, y_test)
-    Y_pred = regressor.predict(x_test)
-    sqrt_error = np.sqrt(sklearn.metrics.mean_squared_error(y_test, Y_pred))
+    regressor.predict(x_test)
     regressor.plot_losses()
     save_regressor(regressor.model)
 
