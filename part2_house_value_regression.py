@@ -201,13 +201,6 @@ class Regressor(torch.nn.Module):
             x = independent_scaler.fit_transform(x)
             self.independent_scaler = independent_scaler
 
-            # convert data frame to tensor for the NN
-            x = torch.tensor(x, dtype=torch.float)
-            if y is not None:
-                y = torch.tensor(y.values, dtype=torch.float)
-                new_shape = (len(y), 1)
-                y = y.view(new_shape)
-
         # if test\validation, use the stored parameters
         else:
             #Impute the missing values in the data set
@@ -221,23 +214,8 @@ class Regressor(torch.nn.Module):
             # Standardize test data
             x = self.independent_scaler.transform(x)
 
-            # convert data frame to tensor for the NN
-            x = torch.tensor(x, dtype=torch.float)
-            if y is not None:
-                y = torch.tensor(y.values, dtype=torch.float)
-                new_shape = (len(y), 1)
-                y = y.view(new_shape)
-
         # Return preprocessed x and y, return None for y if it was None
         return x, y
-
-
-    def forward(self, x):
-        for layer in self.layers:
-            output = layer(x)
-            x = output
-            
-        return output 
 
     def fit(self, x, y):
         """
@@ -257,6 +235,12 @@ class Regressor(torch.nn.Module):
         #                       ** START OF YOUR CODE **
         #######################################################################
         X, Y = self._preprocessor(x, y=y, training=True)  # Do not forget
+        # convert data frame to tensor for the NN
+        X = torch.tensor(X, dtype=torch.float)
+        Y = torch.tensor(Y.values, dtype=torch.float)
+        new_shape = (len(Y), 1)
+        Y = Y.view(new_shape)
+
         loss_func = nn.MSELoss()
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
 
@@ -280,8 +264,6 @@ class Regressor(torch.nn.Module):
         #                       ** END OF YOUR CODE **
         #######################################################################
 
-    
-
     def predict(self, x):
         """
         Ouput the value corresponding to an input x.
@@ -299,10 +281,12 @@ class Regressor(torch.nn.Module):
         #                       ** START OF YOUR CODE **
         #######################################################################
 
-        # X, _ = self._preprocessor(x, training=False)  # I am not sure if needed here
+        X, _ = self._preprocessor(x, training=False)  # I am not sure if needed here
+        # convert data frame to tensor for the NN
+        X = torch.tensor(X, dtype=torch.float)
         with torch.no_grad():
-            prediction = self.forward(x)
-        return prediction
+            prediction = self.forward(X)
+        return np.array(prediction)
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -326,13 +310,15 @@ class Regressor(torch.nn.Module):
         #                       ** START OF YOUR CODE **
         #######################################################################
 
-        X, Y = self._preprocessor(x, y=y, training=False)  # Do not forget
-        Y_pred = self.predict(X)
-        Y_pred_copy = copy.deepcopy(Y_pred)
+        Y_pred = self.predict(x)
+
+        # remove nans in the prediction
+        '''Y_pred_copy = copy.deepcopy(Y_pred)
         Y_pred = Y_pred[~torch.isnan(Y_pred_copy)]
-        Y = Y[~torch.isnan(Y_pred_copy)]
-        mean_absolute_error = sklearn.metrics.mean_squared_error(Y, Y_pred)
-        return mean_absolute_error
+        Y = Y[~torch.isnan(Y_pred_copy)]'''
+
+        sqrt_error = np.sqrt(sklearn.metrics.mean_squared_error(y, Y_pred))
+        return sqrt_error
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -410,14 +396,19 @@ def example_main():
         test_size=0.20, random_state=42)
 
     # fit regressor
-    regressor = Regressor(x_train, nb_epoch=100)
+    regressor = Regressor(x_train, nb_epoch=100, nodes_h_layers=[400,150,50], activation="relu", lr=0.01, dropout=0.1)
     regressor.fit(x_train, y_train)
-
+    y_pred = regressor.predict(x_test)
+    sqrt_error = np.sqrt(sklearn.metrics.mean_squared_error(y_test, y_pred))
+    print(sqrt_error)
     test_err = regressor.score(x_test, y_test)
     print("\nTest regressor error: {}\n".format(test_err))
 
     #regressor.plot_losses()
     save_regressor(regressor)
+
+    new_regressor = load_regressor()
+
 
 
 if __name__ == "__main__":
