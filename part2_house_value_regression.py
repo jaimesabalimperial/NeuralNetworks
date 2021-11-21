@@ -19,6 +19,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn import metrics
 import torch
 import torch.nn as nn
+from tqdm import tqdm
 
 pd.options.mode.chained_assignment = None  # default='warn'
 
@@ -137,7 +138,6 @@ class Regressor(torch.nn.Module):
                 i += 1
 
         self.model = torch.nn.Sequential(*self.layers)
-        print(self.model)
         self.optimiser = torch.optim.Adam(self.parameters(), lr=self.lr)
         self.scaler = None
         self.labelEncoder = None
@@ -255,7 +255,7 @@ class Regressor(torch.nn.Module):
             self.optimiser.zero_grad()  # clear gradients for next train
             loss_train.backward()  # backpropagation, compute gradients
             self.optimiser.step()  # apply gradients
-            print(f'epoch {t + 1} finished with training loss: {loss_train}.')
+            #print(f'epoch {t + 1} finished with training loss: {loss_train}.')
 
         self.losses = losses
 
@@ -348,8 +348,8 @@ def load_regressor():
     print("\nLoaded model in part2_model.pickle\n")
     return trained_model
 
-
-def RegressorHyperParameterSearch():
+def RegressorHyperParameterSearch(x_train, y_train, x_test, y_test, lr_list, dropouts, num_layers, 
+                                  minNodes, maxNodes, step, activations_list=["tanh", "relu"], nb_epochs = 50):
     # Ensure to add whatever inputs you deem necessary to this function
     """
     Performs a hyper-parameter for fine-tuning the regressor implemented
@@ -366,8 +366,51 @@ def RegressorHyperParameterSearch():
     #######################################################################
     #                       ** START OF YOUR CODE **
     #######################################################################
+    opt_lr = None
+    opt_dropout = None
+    opt_activation = None
+    opt_n_per_layer = None
+    possible_n_per_layer = [np.arange(minNodes, maxNodes, step) for _ in range(num_layers)]
+    node_combinations = [list(x) for x in np.array(np.meshgrid(*possible_n_per_layer)).T.reshape(-1,len(possible_n_per_layer))]
+    best_test_err = float("inf")
 
-    return  # Return the chosen hyper parameters
+    total_hp_combs = len(node_combinations)*len(activations_list)*len(dropouts)*len(lr_list)
+
+    i = 0
+    for nodes_h_layers in tqdm(node_combinations):
+        for activation in activations_list:
+            for dropout in dropouts:
+                for lr in lr_list:
+                    i += 1
+                    regressor = Regressor(x_train, nb_epoch=nb_epochs, nodes_h_layers=nodes_h_layers, activation=activation, lr=lr, dropout=dropout)
+                    regressor.fit(x_train, y_train)
+                    test_err = regressor.score(x_test, y_test)
+                    if test_err < best_test_err:
+                        best_test_err = test_err
+
+                        print(f"\nUpdated best test error: {best_test_err}")
+                        print(f"Hyperparemeters:")
+                        print(f"Activation = {activation}")
+                        print(f"Learning rate = {lr}")
+                        print(f"Nodes per layer = {nodes_h_layers}")
+                        print(f"Dropout = {dropout}")
+
+                        opt_lr = lr
+                        opt_dropout = dropout
+                        opt_activation = activation
+                        opt_n_per_layer = nodes_h_layers
+
+
+    #save best regressor 
+    regressor = Regressor(x_train, nb_epoch=nb_epochs, nodes_h_layers=opt_n_per_layer, activation=opt_activation, lr=opt_lr, dropout=opt_dropout)
+    regressor.fit(x_train, y_train)
+    print("Best regressor has test error: ", best_test_err)
+    save_regressor(regressor)
+
+    return opt_lr, opt_dropout, opt_activation, opt_n_per_layer, best_test_err
+
+
+    #return  # Return the chosen hyper parameters
 
     #######################################################################
     #                       ** END OF YOUR CODE **
@@ -402,6 +445,34 @@ def example_main():
 
     new_regressor = load_regressor()
 
+def example_tuning():
+    output_label = "median_house_value"
+
+    # Use pandas to read CSV data as it contains various object types
+    # Feel free to use another CSV reader tool
+    # But remember that LabTS tests take Pandas Dataframe as inputs
+    data = pd.read_csv("housing.csv")
+
+    # options for train test split
+    x_train, x_test, y_train, y_test = train_test_split(
+        data.drop(columns=output_label),
+        data[output_label],
+        test_size=0.20, random_state=42)
+
+
+    minNodes = 20
+    maxNodes = 100 
+    step = 10
+    lr_list = np.linspace(0.05, 0.7, 5)
+    dropouts_list = np.linspace(0.0, 1.0, 5)
+    num_layers = 3
+
+    (opt_lr, opt_dropout, opt_activation, 
+    opt_n_per_layer, best_test_err) = RegressorHyperParameterSearch(x_train, y_train, x_test, y_test, lr_list, 
+                                                                    dropouts_list, num_layers, minNodes, maxNodes, step)
+
+
 
 if __name__ == "__main__":
-    example_main()
+    example_tuning()
+    #example_main()
