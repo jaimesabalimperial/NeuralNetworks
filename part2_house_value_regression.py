@@ -282,17 +282,17 @@ class Regressor(torch.nn.Module):
 
         X, _ = self._preprocessor(x, training=False)  # I am not sure if needed here
         # convert data frame to tensor for the NN
-
         X = torch.tensor(X, dtype=torch.float)
         with torch.no_grad():
-            for layer in self.layers:
-                if isinstance(layer, torch.nn.Linear):
-                    output = layer(X)
-                    X = output
-                else:
-                    output = (1-0)*layer(X)
-                    X = output
-        return np.array(output)
+            prediction = self.forward(X)
+            # for layer in self.layers:
+            #     if isinstance(layer, torch.nn.Linear):
+            #         output = layer(X)
+            #         X = output
+            #     else:
+            #         output = (1-0)*layer(X)
+            #         X = output
+        return np.array(prediction)
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -315,7 +315,7 @@ class Regressor(torch.nn.Module):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-
+        self.eval()
         Y_pred = self.predict(x)
         rmse = np.sqrt(sklearn.metrics.mean_squared_error(y, Y_pred))
         return rmse
@@ -323,6 +323,28 @@ class Regressor(torch.nn.Module):
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
+    
+    def score_training(self, x, y):
+        """
+        Function to evaluate the model accuracy on a validation dataset.
+
+        Arguments:
+            - x {pd.DataFrame} -- Raw input array of shape
+                (batch_size, input_size).
+            - y {pd.DataFrame} -- Raw ouput array of shape (batch_size, 1).
+
+        Returns:
+            {float} -- Quantification of the efficiency of the model.
+
+        """
+
+    #######################################################################
+    #                       ** START OF YOUR CODE **
+    #######################################################################
+        self.train()
+        Y_pred = self.predict(x)
+        rmse = np.sqrt(sklearn.metrics.mean_squared_error(y, Y_pred))
+        return rmse
 
     def plot_losses(self):
         plt.figure()
