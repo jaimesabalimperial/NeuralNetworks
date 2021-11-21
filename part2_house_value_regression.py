@@ -282,10 +282,17 @@ class Regressor(torch.nn.Module):
 
         X, _ = self._preprocessor(x, training=False)  # I am not sure if needed here
         # convert data frame to tensor for the NN
+
         X = torch.tensor(X, dtype=torch.float)
         with torch.no_grad():
-            prediction = self.forward(X)
-        return np.array(prediction)
+            for layer in self.layers:
+                if isinstance(layer, torch.nn.Linear):
+                    output = layer(X)
+                    X = output
+                else:
+                    output = (1-0)*layer(X)
+                    X = output
+        return np.array(output)
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -467,12 +474,12 @@ def example_tuning():
     dropouts_list = np.linspace(0.0, 1.0, 5)
     num_layers = 3
 
-    (opt_lr, opt_dropout, opt_activation, 
-    opt_n_per_layer, best_test_err) = RegressorHyperParameterSearch(x_train, y_train, x_test, y_test, lr_list, 
-                                                                    dropouts_list, num_layers, minNodes, maxNodes, step)
+    # (opt_lr, opt_dropout, opt_activation, 
+    # opt_n_per_layer, best_test_err) = RegressorHyperParameterSearch(x_train, y_train, x_test, y_test, lr_list, 
+    #                                                                 dropouts_list, num_layers, minNodes, maxNodes, step)
 
 
 
 if __name__ == "__main__":
-    example_tuning()
-    #example_main()
+    # example_tuning()
+    example_main()
