@@ -350,7 +350,7 @@ class Regressor(torch.nn.Module):
         plt.figure()
         plt.grid()
         plt.plot(np.linspace(0, len(self.losses), len(self.losses)), self.losses)
-        plt.plot(np.linspace(0, len(self.losses_val), len(self.losses_val)), self.losses_val)
+        #plt.plot(np.linspace(0, len(self.losses_val), len(self.losses_val)), self.losses_val)
         plt.xlabel("Epoch")
         plt.ylabel("MSE Loss")
         plt.legend(['train loss', 'validation loss'])
@@ -402,6 +402,8 @@ def RegressorHyperParameterSearch(x_train, y_train, x_test, y_test, lr_list, dro
     possible_n_per_layer = [np.arange(minNodes, maxNodes, step) for _ in range(num_layers)]
     node_combinations = [list(x) for x in np.array(np.meshgrid(*possible_n_per_layer)).T.reshape(-1,len(possible_n_per_layer))]
     best_test_err = float("inf")
+    worst_models = {}
+    best_models = {}
 
     total_hp_combs = len(node_combinations)*len(activations_list)*len(dropouts)*len(lr_list)
 
@@ -414,6 +416,25 @@ def RegressorHyperParameterSearch(x_train, y_train, x_test, y_test, lr_list, dro
                     regressor = Regressor(x_train, nb_epoch=nb_epochs, nodes_h_layers=nodes_h_layers, activation=activation, lr=lr, dropout=dropout)
                     regressor.fit(x_train, y_train)
                     test_err = regressor.score(x_test, y_test)
+
+                    #rank top 5 worst models
+                    if len(worst_models) < 5:
+                        worst_models[(tuple(nodes_h_layers),activation,dropout,lr)] = test_err
+                    
+                    else:
+                        if test_err > np.min(list(worst_models.values())):
+                            del worst_models[min(worst_models, key=worst_models.get)]
+                            worst_models[(tuple(nodes_h_layers),activation,dropout,lr)] = test_err
+                    
+                    #rank top 5 best models
+                    if len(best_models) < 5:
+                        best_models[(tuple(nodes_h_layers),activation,dropout,lr)] = test_err
+                    
+                    else:
+                        if test_err < np.max(list(worst_models.values())):
+                            del best_models[max(best_models, key=best_models.get)]
+                            best_models[(tuple(nodes_h_layers),activation,dropout,lr)] = test_err
+
                     if test_err < best_test_err:
                         best_test_err = test_err
 
@@ -442,7 +463,9 @@ def RegressorHyperParameterSearch(x_train, y_train, x_test, y_test, lr_list, dro
         #save regressor only if it produces a score better than the current best saved model
         save_regressor(regressor)
 
-    return opt_lr, opt_dropout, opt_activation, opt_n_per_layer, best_test_err
+    print("Total number of models trained: ", total_hp_combs)
+
+    return best_models, worst_models, opt_lr, opt_dropout, opt_activation, opt_n_per_layer, best_test_err
 
 
     #return  # Return the chosen hyper parameters
@@ -492,18 +515,24 @@ def example_tuning():
         test_size=0.20, random_state=42)
 
 
-    minNodes = 40
-    maxNodes = 80
-    step = 20
+    minNodes = 40 #40 #dont change
+    maxNodes = 130 #130 #dont change
+    step = 30 #dont change 
     lr_list = np.linspace(0.05, 0.7, 5)
-    dropouts_list = [0.0]
-    num_layers = 3
+    dropouts_list = np.linspace(0,1,3)
+    num_layers = 1
 
-    (opt_lr, opt_dropout, opt_activation, 
+    (best_models, worst_models, opt_lr, opt_dropout, opt_activation, 
     opt_n_per_layer, best_test_err) = RegressorHyperParameterSearch(x_train, y_train, x_test, y_test, lr_list, 
                                                                     dropouts_list, num_layers, minNodes, maxNodes, step,
                                                                     activations_list=["relu"])
 
+    print("Top 5 worst models: \n", worst_models)
+
+    print("\nTop 5 best models: \n", best_models)
+
+    best_regressor = load_regressor()
+    best_regressor.plot_losses()
 
 
 if __name__ == "__main__":
