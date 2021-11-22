@@ -378,7 +378,7 @@ def load_regressor():
     return trained_model
 
 def RegressorHyperParameterSearch(x_train, y_train, x_test, y_test, lr_list, dropouts, num_layers, 
-                                  minNodes, maxNodes, step, activations_list=["tanh", "relu"], nb_epochs = 50):
+                                  minNodes, maxNodes, step, activations_list=["tanh", "relu"], nb_epochs = 2000):
     # Ensure to add whatever inputs you deem necessary to this function
     """
     Performs a hyper-parameter for fine-tuning the regressor implemented
@@ -434,7 +434,13 @@ def RegressorHyperParameterSearch(x_train, y_train, x_test, y_test, lr_list, dro
     regressor = Regressor(x_train, nb_epoch=nb_epochs, nodes_h_layers=opt_n_per_layer, activation=opt_activation, lr=opt_lr, dropout=opt_dropout)
     regressor.fit(x_train, y_train)
     print("Best regressor has test error: ", best_test_err)
-    save_regressor(regressor)
+    #regressor.plot_losses()
+    best_regressor = load_regressor()
+    best_score = best_regressor.score(x_test, y_test)
+
+    if test_err < best_score:
+        #save regressor only if it produces a score better than the current best saved model
+        save_regressor(regressor)
 
     return opt_lr, opt_dropout, opt_activation, opt_n_per_layer, best_test_err
 
@@ -469,9 +475,6 @@ def example_main():
     test_err = regressor.score(x_test, y_test)
     print("\nTest regressor error: {}\n".format(test_err))
 
-    # regressor.plot_losses()
-    save_regressor(regressor)
-
     new_regressor = load_regressor()
 
 def example_tuning():
@@ -489,19 +492,20 @@ def example_tuning():
         test_size=0.20, random_state=42)
 
 
-    minNodes = 20
-    maxNodes = 100 
-    step = 10
+    minNodes = 40
+    maxNodes = 80
+    step = 20
     lr_list = np.linspace(0.05, 0.7, 5)
-    dropouts_list = np.linspace(0.0, 1.0, 5)
+    dropouts_list = [0.0]
     num_layers = 3
 
-    # (opt_lr, opt_dropout, opt_activation, 
-    # opt_n_per_layer, best_test_err) = RegressorHyperParameterSearch(x_train, y_train, x_test, y_test, lr_list, 
-    #                                                                 dropouts_list, num_layers, minNodes, maxNodes, step)
+    (opt_lr, opt_dropout, opt_activation, 
+    opt_n_per_layer, best_test_err) = RegressorHyperParameterSearch(x_train, y_train, x_test, y_test, lr_list, 
+                                                                    dropouts_list, num_layers, minNodes, maxNodes, step,
+                                                                    activations_list=["relu"])
 
 
 
 if __name__ == "__main__":
-    # example_tuning()
-    example_main()
+    example_tuning()
+    #example_main()
