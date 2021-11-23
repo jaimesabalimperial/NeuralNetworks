@@ -499,7 +499,7 @@ def example_main():
 
     new_regressor = load_regressor()
 
-def example_tuning():
+def example_tuning(num_layers):
     output_label = "median_house_value"
 
     # Use pandas to read CSV data as it contains various object types
@@ -519,7 +519,6 @@ def example_tuning():
     step = 20 
     lr_list = np.linspace(0.01, 0.9, 5)
     dropouts_list = [0.0]
-    num_layers = 2
 
     (best_models, worst_models, best_params) = RegressorHyperParameterSearch(x_trainval, y_trainval, x_test, y_test, lr_list, 
                                                                              dropouts_list, num_layers, minNodes, maxNodes, step,
