@@ -1,6 +1,7 @@
 import copy
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
+import sys
 
 import matplotlib.pyplot as plt
 import sklearn.impute
@@ -139,8 +140,8 @@ class Regressor(torch.nn.Module):
         self.labelEncoder = None
         self.data_mean = None
         self.model = None
-        self.losses = None
-        self.val_losses = None
+        self.losses = []
+        self.val_losses = []
 
     def forward(self, x):
         #######################################################################
@@ -255,26 +256,21 @@ class Regressor(torch.nn.Module):
             # training loss
             train_prediction = self.forward(X_train)  # input x and predict based on x
             loss_train = loss_func(train_prediction, Y_train)  # must be (1. nn output, 2. target)
-            losses.append(np.sqrt(loss_train.item()))  # root mean squared error
+            self.losses.append(np.sqrt(loss_train.item()))  # root mean squared error
 
             if x_val is not None and y_val is not None:
                 val_prediction = self.forward(X_val)  # input x and predict based on x
                 loss_val = loss_func(val_prediction, Y_val)  # must be (1. nn output, 2. target)
-                val_losses.append(np.sqrt(loss_val.item()))  # root mean squared error
+                self.val_losses.append(np.sqrt(loss_val.item()))  # root mean squared error
 
             if torch.isnan(loss_train):
                 break
+
             self.optimiser.zero_grad()  # clear gradients for next train
             loss_train.backward()  # backpropagation, compute gradients
             self.optimiser.step()  # apply gradients
             #print(f'epoch {t + 1} finished with ---> train_loss = {loss_train} ;  val_loss = {loss_val}.')
 
-        self.losses = losses
-        self.val_losses = val_losses
-
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
 
     def predict(self, x):
         """
@@ -288,21 +284,14 @@ class Regressor(torch.nn.Module):
             {np.darray} -- Predicted value for the given input (batch_size, 1).
 
         """
+        X, _ = self._preprocessor(x, training=False)  
 
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
-
-        X, _ = self._preprocessor(x, training=False)  # I am not sure if needed here
         # convert data frame to tensor for the NN
         X = torch.tensor(X, dtype=torch.float)
         with torch.no_grad():
             prediction = self.forward(X)
-        return np.array(prediction)
 
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
+        return np.array(prediction)
 
     def score(self, x, y):
         """
@@ -317,18 +306,10 @@ class Regressor(torch.nn.Module):
             {float} -- Quantification of the efficiency of the model.
 
         """
-
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
         self.eval()
         Y_pred = self.predict(x)
         rmse = np.sqrt(sklearn.metrics.mean_squared_error(y, Y_pred))
         return rmse
-
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
     
     def score_training(self, x, y):
         """
@@ -406,7 +387,7 @@ def RegressorHyperParameterSearch(x_trainval, y_trainval,  x_test, y_test, lr_li
     best_models = {}
     cv = CrossValidation()
 
-    total_hp_combs = len(node_combinations)*len(activations_list)*len(dropouts)*len(lr_list)*cv.folds
+    total_hp_combs = len(node_combinations)*len(activations_list)*len(dropouts)*len(lr_list)
 
     i = 0
     for nodes_h_layers in tqdm(node_combinations):
@@ -487,10 +468,6 @@ def RegressorHyperParameterSearch(x_trainval, y_trainval,  x_test, y_test, lr_li
 
     return best_models, worst_models, best_params
 
-    #######################################################################
-    #                       ** END OF YOUR CODE **
-    #######################################################################
-
 
 def example_main():
     output_label = "median_house_value"
@@ -542,7 +519,7 @@ def example_tuning():
     step = 20 
     lr_list = np.linspace(0.01, 0.9, 5)
     dropouts_list = [0.0]
-    num_layers = 1
+    num_layers = 2
 
     (best_models, worst_models, best_params) = RegressorHyperParameterSearch(x_trainval, y_trainval, x_test, y_test, lr_list, 
                                                                              dropouts_list, num_layers, minNodes, maxNodes, step,
@@ -556,7 +533,7 @@ def example_tuning():
     best_regressor = load_regressor()
     best_regressor.plot_losses()
 
-
 if __name__ == "__main__":
-    example_tuning()
+    num_layers = int(sys.argv[1])
+    example_tuning(num_layers)
     #example_main()
