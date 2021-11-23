@@ -456,15 +456,17 @@ def RegressorHyperParameterSearch(x_trainval, y_trainval,  x_test, y_test, lr_li
     #regressor.plot_losses()
     test_err = regressor.score(x_test, y_test)
 
-    best_regressor = load_regressor()
-    best_score = best_regressor.score(x_test, y_test)
-    print("Best regressor has test error: ", best_score)
+    save_regressor(regressor)
 
-    if test_err < best_score:
+    #best_regressor = load_regressor()
+    #best_score = best_regressor.score(x_test, y_test)
+    #print("Best regressor has test error: ", best_score)
+
+    #if test_err < best_score:
         #save regressor only if it produces a score better than the current best saved model
-        save_regressor(regressor)
+    #    save_regressor(regressor)
 
-    print("Total number of models trained: ", total_hp_combs)
+    #print("Total number of models trained: ", total_hp_combs)
 
     return best_models, worst_models, best_params
 
