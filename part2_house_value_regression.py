@@ -1,4 +1,6 @@
 import copy
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 import matplotlib.pyplot as plt
 import sklearn.impute
@@ -6,17 +8,11 @@ import torch
 import pickle
 import numpy as np
 import pandas as pd
-import seaborn as sns
-from pandas.plotting import scatter_matrix
-from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import cross_val_score
-from sklearn.linear_model import LinearRegression
-from sklearn.tree import DecisionTreeRegressor
-from sklearn.ensemble import RandomForestRegressor
-from sklearn import metrics
+from sklearn.model_selection import GridSearchCV
+
 import torch
 import torch.nn as nn
 from tqdm import tqdm
@@ -26,13 +22,12 @@ pd.options.mode.chained_assignment = None  # default='warn'
 import numpy as np
 from numpy.random import default_rng
 
-
 class CrossValidation:
 
-    def __init__(self):
+    def __init__(self, k=3):
         seed = 60012  # set random seed to obtain reproducible results
         rg = default_rng(seed)
-        self.folds = None
+        self.folds = k
         self.random_generator = rg
 
     def k_fold_split(self, x, y):
@@ -86,6 +81,7 @@ class CrossValidation:
             folds.append([train_indices, test_indices])
 
         return folds
+
 
 
 class Regressor(torch.nn.Module):
@@ -144,6 +140,7 @@ class Regressor(torch.nn.Module):
         self.data_mean = None
         self.model = None
         self.losses = None
+        self.val_losses = None
 
     def forward(self, x):
         #######################################################################
@@ -217,7 +214,7 @@ class Regressor(torch.nn.Module):
         # Return preprocessed x and y, return None for y if it was None
         return x, y
 
-    def fit(self, x, y):
+    def fit(self, x_train, y_train, x_val = None, y_val = None):
         """
         Regressor training function
 
@@ -234,30 +231,46 @@ class Regressor(torch.nn.Module):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        X, Y = self._preprocessor(x, y=y, training=True)  # Do not forget
-        # convert data frame to tensor for the NN
-        X = torch.tensor(X, dtype=torch.float)
-        Y = torch.tensor(Y.values, dtype=torch.float)
-        new_shape = (len(Y), 1)
-        Y = Y.view(new_shape)
+        X_train, Y_train = self._preprocessor(x_train, y=y_train, training=True)  # Do not forget
+        #convert data frame to tensor for the NN
+        X_train = torch.tensor(X_train, dtype=torch.float)
+        Y_train = torch.tensor(Y_train.values, dtype=torch.float)
+        new_shape = (len(Y_train), 1)
+        Y_train = Y_train.view(new_shape)
+
+        if x_val is not None and y_val is not None:
+            X_val, Y_val = self._preprocessor(x_val, y=y_val)  # Do not forget
+            #convert data frame to tensor for the NN
+            X_val = torch.tensor(X_val, dtype=torch.float)
+            Y_val = torch.tensor(Y_val.values, dtype=torch.float)
+            new_shape = (len(Y_val), 1)
+            Y_val = Y_val.view(new_shape)
 
         loss_func = nn.MSELoss()
 
         # train the model with nb_epoch epochs and present the loss for each epoch
         losses = []
+        val_losses = []
         for t in range(self.nb_epoch):
             # training loss
-            prediction = self.forward(X)  # input x and predict based on x
-            loss_train = loss_func(prediction, Y)  # must be (1. nn output, 2. target)
+            train_prediction = self.forward(X_train)  # input x and predict based on x
+            loss_train = loss_func(train_prediction, Y_train)  # must be (1. nn output, 2. target)
             losses.append(np.sqrt(loss_train.item()))  # root mean squared error
+
+            if x_val is not None and y_val is not None:
+                val_prediction = self.forward(X_val)  # input x and predict based on x
+                loss_val = loss_func(val_prediction, Y_val)  # must be (1. nn output, 2. target)
+                val_losses.append(np.sqrt(loss_val.item()))  # root mean squared error
+
             if torch.isnan(loss_train):
                 break
             self.optimiser.zero_grad()  # clear gradients for next train
             loss_train.backward()  # backpropagation, compute gradients
             self.optimiser.step()  # apply gradients
-            #print(f'epoch {t + 1} finished with training loss: {loss_train}.')
+            #print(f'epoch {t + 1} finished with ---> train_loss = {loss_train} ;  val_loss = {loss_val}.')
 
         self.losses = losses
+        self.val_losses = val_losses
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -285,13 +298,6 @@ class Regressor(torch.nn.Module):
         X = torch.tensor(X, dtype=torch.float)
         with torch.no_grad():
             prediction = self.forward(X)
-            # for layer in self.layers:
-            #     if isinstance(layer, torch.nn.Linear):
-            #         output = layer(X)
-            #         X = output
-            #     else:
-            #         output = (1-0)*layer(X)
-            #         X = output
         return np.array(prediction)
 
         #######################################################################
@@ -338,9 +344,6 @@ class Regressor(torch.nn.Module):
 
         """
 
-    #######################################################################
-    #                       ** START OF YOUR CODE **
-    #######################################################################
         self.train()
         Y_pred = self.predict(x)
         rmse = np.sqrt(sklearn.metrics.mean_squared_error(y, Y_pred))
@@ -350,7 +353,7 @@ class Regressor(torch.nn.Module):
         plt.figure()
         plt.grid()
         plt.plot(np.linspace(0, len(self.losses), len(self.losses)), self.losses)
-        #plt.plot(np.linspace(0, len(self.losses_val), len(self.losses_val)), self.losses_val)
+        plt.plot(np.linspace(0, len(self.val_losses), len(self.val_losses)), self.val_losses)
         plt.xlabel("Epoch")
         plt.ylabel("MSE Loss")
         plt.legend(['train loss', 'validation loss'])
@@ -377,7 +380,7 @@ def load_regressor():
     print("\nLoaded model in part2_model.pickle\n")
     return trained_model
 
-def RegressorHyperParameterSearch(x_train, y_train, x_test, y_test, lr_list, dropouts, num_layers, 
+def RegressorHyperParameterSearch(x_trainval, y_trainval,  x_test, y_test, lr_list, dropouts, num_layers, 
                                   minNodes, maxNodes, step, activations_list=["tanh", "relu"], nb_epochs = 2000):
     # Ensure to add whatever inputs you deem necessary to this function
     """
@@ -395,17 +398,15 @@ def RegressorHyperParameterSearch(x_train, y_train, x_test, y_test, lr_list, dro
     #######################################################################
     #                       ** START OF YOUR CODE **
     #######################################################################
-    opt_lr = None
-    opt_dropout = None
-    opt_activation = None
-    opt_n_per_layer = None
+    best_params = {"lr": None, "dropout": None, "activation": None, "n_per_layer": None}
     possible_n_per_layer = [np.arange(minNodes, maxNodes, step) for _ in range(num_layers)]
     node_combinations = [list(x) for x in np.array(np.meshgrid(*possible_n_per_layer)).T.reshape(-1,len(possible_n_per_layer))]
-    best_test_err = float("inf")
+    best_val_err = float("inf")
     worst_models = {}
     best_models = {}
+    cv = CrossValidation()
 
-    total_hp_combs = len(node_combinations)*len(activations_list)*len(dropouts)*len(lr_list)
+    total_hp_combs = len(node_combinations)*len(activations_list)*len(dropouts)*len(lr_list)*cv.folds
 
     i = 0
     for nodes_h_layers in tqdm(node_combinations):
@@ -413,51 +414,70 @@ def RegressorHyperParameterSearch(x_train, y_train, x_test, y_test, lr_list, dro
             for dropout in dropouts:
                 for lr in lr_list:
                     i += 1
-                    regressor = Regressor(x_train, nb_epoch=nb_epochs, nodes_h_layers=nodes_h_layers, activation=activation, lr=lr, dropout=dropout)
-                    regressor.fit(x_train, y_train)
-                    test_err = regressor.score(x_test, y_test)
+                    print(f"\nModel {i}/{total_hp_combs}")
+                    splits = cv.train_test_k_fold(x_trainval, y_trainval)
+                    cv_val_errors = []
+                    for j, (train_indices, val_indices) in enumerate(splits):
+                        print(f"inner fold {j+1}/{cv.folds}")
+                        #retrieve training and validation sets from random indices (splits)
+                        x_train = x_trainval.iloc[train_indices, :]
+                        y_train = y_trainval.iloc[train_indices]
+                        x_val = x_trainval.iloc[val_indices, :]
+                        y_val = y_trainval.iloc[val_indices]
+
+                        regressor = Regressor(x_train, nb_epoch=nb_epochs, nodes_h_layers=nodes_h_layers, 
+                                              activation=activation, lr=lr, dropout=dropout)
+                        regressor.fit(x_train, y_train, x_val=x_val, y_val=y_val)
+                        val_err = regressor.score_training(x_val, y_val)
+                        cv_val_errors.append(val_err)
+
+                    mean_val_error = np.mean(cv_val_errors)
 
                     #rank top 5 worst models
                     if len(worst_models) < 5:
-                        worst_models[(tuple(nodes_h_layers),activation,dropout,lr)] = test_err
+                        worst_models[(tuple(nodes_h_layers),activation,dropout,lr)] = mean_val_error
                     
                     else:
-                        if test_err > np.min(list(worst_models.values())):
+                        if val_err > np.min(list(worst_models.values())):
                             del worst_models[min(worst_models, key=worst_models.get)]
-                            worst_models[(tuple(nodes_h_layers),activation,dropout,lr)] = test_err
+                            worst_models[(tuple(nodes_h_layers),activation,dropout,lr)] = mean_val_error
                     
                     #rank top 5 best models
                     if len(best_models) < 5:
-                        best_models[(tuple(nodes_h_layers),activation,dropout,lr)] = test_err
+                        best_models[(tuple(nodes_h_layers),activation,dropout,lr)] = mean_val_error
                     
                     else:
-                        if test_err < np.max(list(worst_models.values())):
+                        if val_err < np.max(list(best_models.values())):
                             del best_models[max(best_models, key=best_models.get)]
-                            best_models[(tuple(nodes_h_layers),activation,dropout,lr)] = test_err
+                            best_models[(tuple(nodes_h_layers),activation,dropout,lr)] = mean_val_error
 
-                    if test_err < best_test_err:
-                        best_test_err = test_err
+                    if mean_val_error < best_val_err:
+                        best_val_err = mean_val_error
 
-                        print(f"\nUpdated best test error: {best_test_err}")
+                        print(f"\nUpdated best val error: {best_val_err}")
                         print(f"Hyperparemeters:")
                         print(f"Activation = {activation}")
                         print(f"Learning rate = {lr}")
                         print(f"Nodes per layer = {nodes_h_layers}")
                         print(f"Dropout = {dropout}")
 
-                        opt_lr = lr
-                        opt_dropout = dropout
-                        opt_activation = activation
-                        opt_n_per_layer = nodes_h_layers
+                        best_params["lr"] = lr
+                        best_params["dropout"] = dropout
+                        best_params["activation"] = activation
+                        best_params["n_per_layer"] = nodes_h_layers
 
 
     #save best regressor 
-    regressor = Regressor(x_train, nb_epoch=nb_epochs, nodes_h_layers=opt_n_per_layer, activation=opt_activation, lr=opt_lr, dropout=opt_dropout)
+    regressor = Regressor(x_train, nb_epoch=nb_epochs, nodes_h_layers=best_params["n_per_layer"], 
+                          activation=best_params["activation"], lr=best_params["lr"], dropout=best_params["dropout"])
     regressor.fit(x_train, y_train)
-    print("Best regressor has test error: ", best_test_err)
+    print("Best regressor has validation error: ", best_val_err)
     #regressor.plot_losses()
+    test_err = regressor.score(x_test, y_test)
+
     best_regressor = load_regressor()
     best_score = best_regressor.score(x_test, y_test)
+    print("Best regressor has test error: ", best_score)
 
     if test_err < best_score:
         #save regressor only if it produces a score better than the current best saved model
@@ -465,10 +485,7 @@ def RegressorHyperParameterSearch(x_train, y_train, x_test, y_test, lr_list, dro
 
     print("Total number of models trained: ", total_hp_combs)
 
-    return best_models, worst_models, opt_lr, opt_dropout, opt_activation, opt_n_per_layer, best_test_err
-
-
-    #return  # Return the chosen hyper parameters
+    return best_models, worst_models, best_params
 
     #######################################################################
     #                       ** END OF YOUR CODE **
@@ -482,21 +499,26 @@ def example_main():
     # Feel free to use another CSV reader tool
     # But remember that LabTS tests take Pandas Dataframe as inputs
     data = pd.read_csv("housing.csv")
+    x = data.drop(columns=output_label)
+    y = data[output_label]
 
     # options for train test split
-    x_train, x_test, y_train, y_test = train_test_split(
-        data.drop(columns=output_label),
-        data[output_label],
-        test_size=0.20, random_state=42)
+    (x_train_val, x_test, 
+    y_train_val, y_test) = train_test_split(x,y,test_size=0.20, random_state=42)
+
+    #80/20/20 (train/test/val)
+    x_train, x_val, y_train, y_val = train_test_split(x_train_val, y_train_val, test_size=0.25, random_state=42)
 
     # fit regressor
-    regressor = Regressor(x_train, nb_epoch=100, nodes_h_layers=[400, 150, 50], activation="relu", lr=0.01, dropout=0.1)
-    regressor.fit(x_train, y_train)
+    regressor = Regressor(x_train, nb_epoch=2000, nodes_h_layers=[70 ,70], activation="relu", lr=0.01, dropout=0.0)
+    regressor.fit(x_train, y_train, x_val=x_val, y_val=y_val)
+    regressor.plot_losses()
     # y_pred = regressor.predict(x_test)
     # sqrt_error = np.sqrt(sklearn.metrics.mean_squared_error(y_test, y_pred))
     # print(sqrt_error)
     test_err = regressor.score(x_test, y_test)
     print("\nTest regressor error: {}\n".format(test_err))
+    print("Final validation loss: ", regressor.val_losses[-1])
 
     new_regressor = load_regressor()
 
@@ -507,27 +529,27 @@ def example_tuning():
     # Feel free to use another CSV reader tool
     # But remember that LabTS tests take Pandas Dataframe as inputs
     data = pd.read_csv("housing.csv")
+    x = data.drop(columns=output_label)
+    y = data[output_label]
 
-    # options for train test split
-    x_train, x_test, y_train, y_test = train_test_split(
-        data.drop(columns=output_label),
-        data[output_label],
-        test_size=0.20, random_state=42)
+    #options for train test split
+    (x_trainval, x_test, 
+    y_trainval, y_test) = train_test_split(x,y,test_size=0.20, random_state=42)
 
-
-    minNodes = 40 #40 #dont change
-    maxNodes = 130 #130 #dont change
-    step = 30 #dont change 
-    lr_list = np.linspace(0.05, 0.7, 5)
-    dropouts_list = np.linspace(0,1,3)
+    #define hyperparameter ranges
+    minNodes = 40 
+    maxNodes = 100 
+    step = 20 
+    lr_list = np.linspace(0.01, 0.9, 5)
+    dropouts_list = [0.0]
     num_layers = 1
 
-    (best_models, worst_models, opt_lr, opt_dropout, opt_activation, 
-    opt_n_per_layer, best_test_err) = RegressorHyperParameterSearch(x_train, y_train, x_test, y_test, lr_list, 
-                                                                    dropouts_list, num_layers, minNodes, maxNodes, step,
-                                                                    activations_list=["relu"])
+    (best_models, worst_models, best_params) = RegressorHyperParameterSearch(x_trainval, y_trainval, x_test, y_test, lr_list, 
+                                                                             dropouts_list, num_layers, minNodes, maxNodes, step,
+                                                                             activations_list=["tanh", "relu"])
 
-    print("Top 5 worst models: \n", worst_models)
+    print(f"Best hyperparameters for {num_layers} hidden layers: ", best_params)
+    print("\nTop 5 worst models: \n", worst_models)
 
     print("\nTop 5 best models: \n", best_models)
 
