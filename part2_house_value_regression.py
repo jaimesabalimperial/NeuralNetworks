@@ -497,7 +497,7 @@ def example_main():
     # fit regressor
     regressor = Regressor(x_train)
     regressor.fit(x_train, y_train, x_val, y_val)
-    regressor.plot_losses(val=True) #plot losses
+    #regressor.plot_losses(val=True) #plot losses
     print("Final validation loss: ", regressor.val_losses[-1])
 
     #save regressor
@@ -514,14 +514,14 @@ def example_main():
 
     test_predictions = loaded_regressor.predict(x_test)
 
-    plt.figure()
-    plt.grid()
-    plt.plot(test_predictions, y_test, "r.", markersize=4)
-    plt.plot(y_test, y_test, "black", label="Expected result")
-    plt.xlabel("Prediction")
-    plt.ylabel("True Values")
-    plt.legend()
-    plt.show()
+    #plt.figure()
+    #plt.grid()
+    #plt.plot(test_predictions, y_test, "r.", markersize=4)
+    #plt.plot(y_test, y_test, "black", label="Expected result")
+    #plt.xlabel("Prediction")
+    #plt.ylabel("True Values")
+    #plt.legend()
+    #plt.show()
 
 def example_tuning(num_layers):
     output_label = "median_house_value"
@@ -539,10 +539,10 @@ def example_tuning(num_layers):
 
     #define hyperparameter ranges
     minNodes = 40 
-    maxNodes = 100 
+    maxNodes = 120 
     step = 20 
     lr_list = np.linspace(0.01, 0.9, 5)
-    dropouts_list = [0.0]
+    dropouts_list = np.linspace(0.0, 0.5, 5)
 
     best_params = RegressorHyperParameterSearch(x_trainval, y_trainval, x_test, y_test, lr_list, 
                                                                              dropouts_list, num_layers, minNodes, maxNodes, step,
