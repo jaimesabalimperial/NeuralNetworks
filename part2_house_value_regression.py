@@ -490,10 +490,10 @@ def example_main():
     x_train, x_val, y_train, y_val = train_test_split(x_train_val, y_train_val, test_size=0.25, random_state=42)
 
     # fit regressor
-    regressor = Regressor(x_train)
-    regressor.fit(x_train, y_train, x_val, y_val)
-    regressor.plot_losses(val=True) #plot losses
-    print("Final validation loss: ", regressor.val_losses[-1])
+    regressor = Regressor(x)
+    regressor.fit(x, y)
+    #regressor.plot_losses(val=True) #plot losses
+    #print("Final validation loss: ", regressor.val_losses[-1])
 
     #save regressor
     save_regressor(regressor)
