@@ -11,7 +11,7 @@ from pandas.plotting import scatter_matrix
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.model_selection import cross_val_score
 from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeRegressor
@@ -103,7 +103,7 @@ class Regressor(torch.nn.Module):
         """
         super(Regressor, self).__init__()
         self.labelEncoder = dict.fromkeys([col for col in x.columns if x[col].dtype in ["bool", "object"]])
-        self.standard_scaler = None
+        self.scaler = None
         self.data_mean = None
         X, _ = self._preprocessor(x, training=True)
 
@@ -115,7 +115,7 @@ class Regressor(torch.nn.Module):
         self.activation = activations[activation]
         self.layers = []
         self.lr = lr
-        self.dropout = dropout
+        self.dropout = dropout 
 
         if len(self.nodes_h_layer) == 0:
             self.layer_1 = torch.nn.Linear(in_features=self.input_size, out_features=self.output_size)
@@ -182,11 +182,10 @@ class Regressor(torch.nn.Module):
                     x[col] = labelEncoder.fit_transform(x[col])
                     self.labelEncoder[col] = labelEncoder
 
-            # Standardize training data
-            # Standardize x
-            standard_scaler = StandardScaler()
-            x = standard_scaler.fit_transform(x)
-            self.standard_scaler = standard_scaler
+            #Normalise training data
+            scaler = MinMaxScaler()
+            x = scaler.fit_transform(x)
+            self.scaler = scaler
 
         # if test\validation, use the stored parameters
         else:
@@ -201,7 +200,7 @@ class Regressor(torch.nn.Module):
                     x[col] = self.labelEncoder[col].transform(x[col])
 
             # Standardize test data
-            x = self.standard_scaler.transform(x)
+            x = self.scaler.transform(x)
 
         # Return preprocessed x and y, return None for y if it was None
         return x, y
@@ -496,8 +495,8 @@ def example_main():
     x_train, x_val, y_train, y_val = train_test_split(x_train_val, y_train_val, test_size=0.25, random_state=42)
 
     # fit regressor
-    regressor = Regressor(x)
-    regressor.fit(x, y)
+    regressor = Regressor(x_train)
+    regressor.fit(x_train, y_train, x_val, y_val)
     #regressor.plot_losses(val=True) #plot losses
     #print("Final validation loss: ", regressor.val_losses[-1])
 
