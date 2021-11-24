@@ -497,8 +497,8 @@ def example_main():
     # fit regressor
     regressor = Regressor(x_train)
     regressor.fit(x_train, y_train, x_val, y_val)
-    #regressor.plot_losses(val=True) #plot losses
-    #print("Final validation loss: ", regressor.val_losses[-1])
+    regressor.plot_losses(val=True) #plot losses
+    print("Final validation loss: ", regressor.val_losses[-1])
 
     #save regressor
     save_regressor(regressor)
@@ -511,6 +511,17 @@ def example_main():
     loaded_regressor = load_regressor()
     loaded_test_err = loaded_regressor.score(x_test, y_test)
     print("\nLoaded model test regressor error: {}\n".format(loaded_test_err))
+
+    test_predictions = loaded_regressor.predict(x_test)
+
+    plt.figure()
+    plt.grid()
+    plt.plot(test_predictions, y_test, "r.", markersize=4)
+    plt.plot(y_test, y_test, "black", label="Expected result")
+    plt.xlabel("Prediction")
+    plt.ylabel("True Values")
+    plt.legend()
+    plt.show()
 
 def example_tuning(num_layers):
     output_label = "median_house_value"
@@ -538,6 +549,7 @@ def example_tuning(num_layers):
                                                                              activations_list=["tanh", "relu"])
 
     print(f"Best hyperparameters for {num_layers} hidden layers: ", best_params)
+
     #print("\nTop 5 worst models: \n", worst_models)
 
     #print("\nTop 5 best models: \n", best_models)
