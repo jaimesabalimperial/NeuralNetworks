@@ -1,5 +1,4 @@
 import copy
-import tqdm
 
 import matplotlib.pyplot as plt
 import sklearn.impute
@@ -368,7 +367,7 @@ def RegressorHyperParameterSearch(x_trainval, y_trainval,  x_test, y_test, lr_li
     total_hp_combs = len(node_combinations)*len(activations_list)*len(dropouts)*len(lr_list)
 
     i = 0
-    for nodes_h_layers in tqdm(node_combinations):
+    for nodes_h_layers in node_combinations:
         for activation in activations_list:
             for dropout in dropouts:
                 for lr in lr_list:
