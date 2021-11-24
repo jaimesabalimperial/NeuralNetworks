@@ -379,14 +379,14 @@ def RegressorHyperParameterSearch(x_trainval, y_trainval,  x_test, y_test, lr_li
         y_trainval (pd.DataFrame): Dataframe containing the target training data to the regressor. 
         x_test (pd.DataFrame): Dataframe containing the input test data to evaluate the regressor. 
         y_test (pd.DataFrame):Dataframe containing the target test data to evaluate the regressor. 
-        lr_list (np.ndarray): 
-        dropouts (np.ndarray): 
-        num_layers (int): 
-        minNodes (int): 
-        maxNodes (int): 
-        step (int): 
-        activations_list {list}: 
-        nb_epochs {int}: number of epochs to train the models with 
+        lr_list (np.ndarray): array containing learning rates to search through.
+        dropouts (np.ndarray): array containing learning rates to search through.
+        num_layers (int): number of hidden layers in network
+        minNodes (int): minimum nodes per hidden layer
+        maxNodes (int): maximum nodes per hidden layer
+        step (int): step taken between nimNodes and maxNodes (num_nodes_to_test = (maxNodes - minNodes)/step)
+        activations_list {list}: list of activation functions to test.
+        nb_epochs {int}: number of epochs to train the models with.
 
 
     Returns:
@@ -545,8 +545,8 @@ def example_tuning(num_layers):
     dropouts_list = np.linspace(0.0, 0.5, 5)
 
     best_params = RegressorHyperParameterSearch(x_trainval, y_trainval, x_test, y_test, lr_list, 
-                                                                             dropouts_list, num_layers, minNodes, maxNodes, step,
-                                                                             activations_list=["tanh", "relu"])
+                                                dropouts_list, num_layers, minNodes, maxNodes, step,
+                                                activations_list=["tanh", "relu"])
 
     print(f"Best hyperparameters for {num_layers} hidden layers: ", best_params)
 
