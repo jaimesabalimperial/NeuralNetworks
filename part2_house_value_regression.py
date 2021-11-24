@@ -101,7 +101,7 @@ class Regressor(torch.nn.Module):
             - nb_epoch {int} -- number of epoch to train the network.
         """
         super(Regressor, self).__init__()
-        self.labelEncoder = dict.fromkeys(list(x.columns))
+        self.labelEncoder = dict.fromkeys([col for col in x.columns if x[col].dtype in ["bool", "object"]])
         self.standard_scaler = None
         self.data_mean = None
         X, _ = self._preprocessor(x, training=True)
@@ -385,10 +385,6 @@ def RegressorHyperParameterSearch(x_trainval, y_trainval,  x_test, y_test, lr_li
         best_params (dict): Dictionary containing optimised hyper-parameters.
 
     """
-
-    #######################################################################
-    #                       ** START OF YOUR CODE **
-    #######################################################################
     best_params = {"lr": None, "dropout": None, "activation": None, "n_per_layer": None}
     possible_n_per_layer = [np.arange(minNodes, maxNodes, step) for _ in range(num_layers)]
     node_combinations = [list(x) for x in np.array(np.meshgrid(*possible_n_per_layer)).T.reshape(-1,len(possible_n_per_layer))]
@@ -491,7 +487,7 @@ def example_main():
     x_train, x_val, y_train, y_val = train_test_split(x_train_val, y_train_val, test_size=0.25, random_state=42)
 
     # fit regressor
-    regressor = Regressor(x, nb_epoch=2000, nodes_h_layers=[60 ,80], activation="relu", lr=0.455, dropout=0.0)
+    regressor = Regressor(x_train)
     regressor.fit(x_train, y_train, x_val, y_val)
     regressor.plot_losses(val=True) #plot losses
     print("Final validation loss: ", regressor.val_losses[-1])
@@ -504,7 +500,9 @@ def example_main():
     print("\nTest regressor error: {}\n".format(test_err))
 
     #test regressor loading 
-    new_regressor = load_regressor()
+    loaded_regressor = load_regressor()
+    loaded_test_err = loaded_regressor.score(x_test, y_test)
+    print("\nLoaded model test regressor error: {}\n".format(loaded_test_err))
 
 def example_tuning(num_layers):
     output_label = "median_house_value"
