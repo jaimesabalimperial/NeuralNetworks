@@ -1,4 +1,5 @@
 import copy
+from operator import truediv
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import sys
@@ -31,7 +32,7 @@ class CrossValidation:
         self.folds = k
         self.random_generator = rg
 
-    def k_fold_split(self, x, y):
+    def k_fold_split(self, x):
         """ Split n_instances into n mutually exclusive splits at random.
 
         Args:
@@ -67,7 +68,7 @@ class CrossValidation:
         """
 
         # split the dataset into k splits
-        split_indices = self.k_fold_split(x, y)
+        split_indices = self.k_fold_split(x)
 
         folds = []
         for k in range(self.folds):
@@ -77,7 +78,7 @@ class CrossValidation:
             # combine remaining splits as train
             # this solution is fancy and worked for me
             # feel free to use a more verbose solution that's more readable
-            train_indices = np.hstack(split_indices[:k] + split_indices[k + 1:])
+            train_indices = np.hstack(split_indices[:k] + split_indices[k+1:])
 
             folds.append([train_indices, test_indices])
 
@@ -87,7 +88,7 @@ class CrossValidation:
 
 class Regressor(torch.nn.Module):
 
-    def __init__(self, x, nb_epoch=100, nodes_h_layers=[400, 150, 50], activation="relu", lr=0.01, dropout=0.1):
+    def __init__(self, x, nb_epoch=2000, nodes_h_layers=[60, 80], activation="relu", lr=0.455, dropout=0.0):
         # You can add any input parameters you need
         # Remember to set them with a default value for LabTS tests
         """
@@ -98,13 +99,11 @@ class Regressor(torch.nn.Module):
                 (batch_size, input_size), used to compute the size
                 of the network.
             - nb_epoch {int} -- number of epoch to train the network.
-
         """
-
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
         super(Regressor, self).__init__()
+        self.labelEncoder = dict.fromkeys(list(x.columns))
+        self.standard_scaler = None
+        self.data_mean = None
         X, _ = self._preprocessor(x, training=True)
 
         self.input_size = X.shape[1]
@@ -136,17 +135,18 @@ class Regressor(torch.nn.Module):
 
         self.model = torch.nn.Sequential(*self.layers)
         self.optimiser = torch.optim.Adam(self.parameters(), lr=self.lr)
-        self.scaler = None
-        self.labelEncoder = None
-        self.data_mean = None
         self.model = None
         self.losses = []
         self.val_losses = []
 
     def forward(self, x):
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
+        """Performs a forward pass through the regressor.
+        
+        Args:
+            x {np.ndarray} -- Processed input array of size (batch_size, input_size).
+            
+        Returns:
+            output {np.ndarray} -- Predictions from current state of the model"""
         for layer in self.layers:
             output = layer(x)
             x = output
@@ -165,39 +165,27 @@ class Regressor(torch.nn.Module):
                 testing the model.
 
         Returns:
-            - {torch.tensor} or {numpy.ndarray} -- Preprocessed input array of
-              size (batch_size, input_size).
-            - {torch.tensor} or {numpy.ndarray} -- Preprocessed target array of
-              size (batch_size, 1).
+            - x {torch.tensor} or {numpy.ndarray} -- Preprocessed input array of size (batch_size, input_size).
+            - y {torch.tensor} or {numpy.ndarray} -- Preprocessed target array of size (batch_size, 1).
 
         """
-
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
         if training:
-            # presenting statistics of the data
-            # print("The number of rows and colums are {} and also called shape of the matrix".format(x.shape))
-            # print("Columns names are \n {}".format(x.columns))
-
             # Impute the missing values in the data set
             self.data_mean = x.mean(numeric_only=True)
             x.fillna(x.mean(numeric_only=True), inplace=True)
 
-            # Label encode for label features
-            # print(x.dtypes)
-            labelEncoder = LabelEncoder()
-            # print(x["ocean_proximity"].value_counts())
-            x["ocean_proximity"] = labelEncoder.fit_transform(x["ocean_proximity"])
-            self.labelEncoder = labelEncoder
-            x["ocean_proximity"].value_counts()
-            x.describe()
+            # Label encode for label features (specific to housing data)
+            for col in list(x.columns):
+                if x[col].dtype in ["bool", "object"]:
+                    labelEncoder = LabelEncoder()
+                    x[col] = labelEncoder.fit_transform(x[col])
+                    self.labelEncoder[col] = labelEncoder
 
             # Standardize training data
             # Standardize x
-            independent_scaler = StandardScaler()
-            x = independent_scaler.fit_transform(x)
-            self.independent_scaler = independent_scaler
+            standard_scaler = StandardScaler()
+            x = standard_scaler.fit_transform(x)
+            self.standard_scaler = standard_scaler
 
         # if test\validation, use the stored parameters
         else:
@@ -205,71 +193,77 @@ class Regressor(torch.nn.Module):
             x.fillna(self.data_mean, inplace=True)
 
             # encode non-numerate features if it wasn't encoded before
-            x["ocean_proximity"] = x["ocean_proximity"].map(lambda s: -1 if s not in self.labelEncoder.classes_ else s)
-            self.labelEncoder.classes_ = np.append(self.labelEncoder.classes_, -1)
-            x["ocean_proximity"] = self.labelEncoder.transform(x["ocean_proximity"])
+            for col in list(x.columns):
+                if x[col].dtype in ["bool", "object"]:
+                    x[col] = x[col].map(lambda s: -1 if s not in self.labelEncoder[col].classes_ else s)
+                    self.labelEncoder[col].classes_ = np.append(self.labelEncoder[col].classes_, -1)
+                    x[col] = self.labelEncoder[col].transform(x[col])
 
             # Standardize test data
-            x = self.independent_scaler.transform(x)
+            x = self.standard_scaler.transform(x)
 
         # Return preprocessed x and y, return None for y if it was None
         return x, y
 
     def fit(self, x_train, y_train, x_val = None, y_val = None):
         """
-        Regressor training function
+        Regressor training function. 
 
         Arguments:
-            - x {pd.DataFrame} -- Raw input array of shape
-                (batch_size, input_size).
+            - x {pd.DataFrame} -- Raw input array of shape (batch_size, input_size).
             - y {pd.DataFrame} -- Raw output array of shape (batch_size, 1).
 
-        Returns:
-            self {Regressor} -- Trained model.
-
         """
+        X_train, Y_train = self._preprocessor(x_train, y=y_train, training=True) #process train data with standard scaler and label encoder
 
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
-        X_train, Y_train = self._preprocessor(x_train, y=y_train, training=True)  # Do not forget
         #convert data frame to tensor for the NN
         X_train = torch.tensor(X_train, dtype=torch.float)
         Y_train = torch.tensor(Y_train.values, dtype=torch.float)
+
+        #reshape target tensor 
         new_shape = (len(Y_train), 1)
         Y_train = Y_train.view(new_shape)
 
         if x_val is not None and y_val is not None:
-            X_val, Y_val = self._preprocessor(x_val, y=y_val)  # Do not forget
+            X_val, Y_val = self._preprocessor(x_val, y=y_val) #process val data with standard scaler and label encoder
+
             #convert data frame to tensor for the NN
             X_val = torch.tensor(X_val, dtype=torch.float)
             Y_val = torch.tensor(Y_val.values, dtype=torch.float)
+
+            #reshape target tensor 
             new_shape = (len(Y_val), 1)
             Y_val = Y_val.view(new_shape)
 
-        loss_func = nn.MSELoss()
+        loss_func = nn.MSELoss() #define loss function
 
         # train the model with nb_epoch epochs and present the loss for each epoch
-        losses = []
-        val_losses = []
         for t in range(self.nb_epoch):
-            # training loss
-            train_prediction = self.forward(X_train)  # input x and predict based on x
+            #training loss
+            train_prediction = self.forward(X_train)  # redict based on x_train
             loss_train = loss_func(train_prediction, Y_train)  # must be (1. nn output, 2. target)
             self.losses.append(np.sqrt(loss_train.item()))  # root mean squared error
 
+            #same operations as above for val data
             if x_val is not None and y_val is not None:
-                val_prediction = self.forward(X_val)  # input x and predict based on x
-                loss_val = loss_func(val_prediction, Y_val)  # must be (1. nn output, 2. target)
-                self.val_losses.append(np.sqrt(loss_val.item()))  # root mean squared error
+                val_prediction = self.forward(X_val) 
+                loss_val = loss_func(val_prediction, Y_val) 
+                self.val_losses.append(np.sqrt(loss_val.item())) 
 
+            #condition used in testing code (can be removed)
             if torch.isnan(loss_train):
                 break
 
+            #perform backpropagation using the training loss obtained
             self.optimiser.zero_grad()  # clear gradients for next train
             loss_train.backward()  # backpropagation, compute gradients
             self.optimiser.step()  # apply gradients
-            #print(f'epoch {t + 1} finished with ---> train_loss = {loss_train} ;  val_loss = {loss_val}.')
+
+            #print different message if using validation data or not
+            if x_val is not None and y_val is not None:
+                print(f'epoch {t + 1} finished with ---> train_loss = {np.sqrt(loss_train.item()):.4f} ;  val_loss = {np.sqrt(loss_val.item()):.4f}')
+            else:
+                print(f'epoch {t + 1} finished with ---> train_loss = {np.sqrt(loss_train.item()):.4f}')
 
 
     def predict(self, x):
@@ -281,7 +275,7 @@ class Regressor(torch.nn.Module):
                 (batch_size, input_size).
 
         Returns:
-            {np.darray} -- Predicted value for the given input (batch_size, 1).
+            prediction {np.darray} -- Predicted value for the given input (batch_size, 1).
 
         """
         X, _ = self._preprocessor(x, training=False)  
@@ -291,7 +285,8 @@ class Regressor(torch.nn.Module):
         with torch.no_grad():
             prediction = self.forward(X)
 
-        return np.array(prediction)
+        prediction = np.array(prediction)
+        return prediction
 
     def score(self, x, y):
         """
@@ -303,7 +298,7 @@ class Regressor(torch.nn.Module):
             - y {pd.DataFrame} -- Raw ouput array of shape (batch_size, 1).
 
         Returns:
-            {float} -- Quantification of the efficiency of the model.
+            rmse {float} -- Quantification of the efficiency of the model.
 
         """
         self.eval()
@@ -321,7 +316,7 @@ class Regressor(torch.nn.Module):
             - y {pd.DataFrame} -- Raw ouput array of shape (batch_size, 1).
 
         Returns:
-            {float} -- Quantification of the efficiency of the model.
+            rmse {float} -- Quantification of the efficiency of the model.
 
         """
 
@@ -330,13 +325,17 @@ class Regressor(torch.nn.Module):
         rmse = np.sqrt(sklearn.metrics.mean_squared_error(y, Y_pred))
         return rmse
 
-    def plot_losses(self):
+    def plot_losses(self, val=False):
+
         plt.figure()
         plt.grid()
         plt.plot(np.linspace(0, len(self.losses), len(self.losses)), self.losses)
-        plt.plot(np.linspace(0, len(self.val_losses), len(self.val_losses)), self.val_losses)
+
+        if val:
+            plt.plot(np.linspace(0, len(self.val_losses), len(self.val_losses)), self.val_losses)
+
         plt.xlabel("Epoch")
-        plt.ylabel("MSE Loss")
+        plt.ylabel("RMSE Loss")
         plt.legend(['train loss', 'validation loss'])
         plt.show()
 
@@ -344,6 +343,10 @@ class Regressor(torch.nn.Module):
 def save_regressor(trained_model):
     """
     Utility function to save the trained regressor model in part2_model.pickle.
+
+    Args:
+        trained_model (Regressor()): Trained Regressor() object.
+
     """
     # If you alter this, make sure it works in tandem with load_regressor
     with open('part2_model.pickle', 'wb') as target:
@@ -354,11 +357,14 @@ def save_regressor(trained_model):
 def load_regressor():
     """
     Utility function to load the trained regressor model in part2_model.pickle.
+
+    Returns:
+        trained_model (Regressor()): Trained Regressor() object.
     """
     # If you alter this, make sure it works in tandem with save_regressor
     with open('part2_model.pickle', 'rb') as target:
         trained_model = pickle.load(target)
-    print("\nLoaded model in part2_model.pickle\n")
+    print("\nLoaded model part2_model.pickle\n")
     return trained_model
 
 def RegressorHyperParameterSearch(x_trainval, y_trainval,  x_test, y_test, lr_list, dropouts, num_layers, 
@@ -369,10 +375,14 @@ def RegressorHyperParameterSearch(x_trainval, y_trainval,  x_test, y_test, lr_li
     in the Regressor class.
 
     Arguments:
-        Add whatever inputs you need.
+        x_trainval (pd.DataFrame): Dataframe containing the input training data to the regressor. 
+        y_trainval (pd.DataFrame): Dataframe containing the target training data to the regressor. 
+        x_test (pd.DataFrame): Dataframe containing the input test data to evaluate the regressor. 
+        y_test (pd.DataFrame):Dataframe containing the target test data to evaluate the regressor. 
+        lr_list (np.ndarray): 
 
     Returns:
-        The function should return your optimised hyper-parameters.
+        best_params (dict): Dictionary containing optimised hyper-parameters.
 
     """
 
@@ -455,20 +465,12 @@ def RegressorHyperParameterSearch(x_trainval, y_trainval,  x_test, y_test, lr_li
     print("Best regressor has validation error: ", best_val_err)
     #regressor.plot_losses()
     test_err = regressor.score(x_test, y_test)
+    print("Best regressor has test error: ", test_err)
 
+    #save best regressor
     save_regressor(regressor)
 
-    #best_regressor = load_regressor()
-    #best_score = best_regressor.score(x_test, y_test)
-    #print("Best regressor has test error: ", best_score)
-
-    #if test_err < best_score:
-        #save regressor only if it produces a score better than the current best saved model
-    #    save_regressor(regressor)
-
-    #print("Total number of models trained: ", total_hp_combs)
-
-    return best_models, worst_models, best_params
+    return best_params
 
 
 def example_main():
@@ -489,16 +491,19 @@ def example_main():
     x_train, x_val, y_train, y_val = train_test_split(x_train_val, y_train_val, test_size=0.25, random_state=42)
 
     # fit regressor
-    regressor = Regressor(x_train, nb_epoch=2000, nodes_h_layers=[70 ,70], activation="relu", lr=0.01, dropout=0.0)
-    regressor.fit(x_train, y_train, x_val=x_val, y_val=y_val)
-    regressor.plot_losses()
-    # y_pred = regressor.predict(x_test)
-    # sqrt_error = np.sqrt(sklearn.metrics.mean_squared_error(y_test, y_pred))
-    # print(sqrt_error)
-    test_err = regressor.score(x_test, y_test)
-    print("\nTest regressor error: {}\n".format(test_err))
+    regressor = Regressor(x, nb_epoch=2000, nodes_h_layers=[60 ,80], activation="relu", lr=0.455, dropout=0.0)
+    regressor.fit(x_train, y_train, x_val, y_val)
+    regressor.plot_losses(val=True) #plot losses
     print("Final validation loss: ", regressor.val_losses[-1])
 
+    #save regressor
+    save_regressor(regressor)
+
+    #evaluate model on test data
+    test_err = regressor.score(x_test, y_test)
+    print("\nTest regressor error: {}\n".format(test_err))
+
+    #test regressor loading 
     new_regressor = load_regressor()
 
 def example_tuning(num_layers):
@@ -522,19 +527,19 @@ def example_tuning(num_layers):
     lr_list = np.linspace(0.01, 0.9, 5)
     dropouts_list = [0.0]
 
-    (best_models, worst_models, best_params) = RegressorHyperParameterSearch(x_trainval, y_trainval, x_test, y_test, lr_list, 
+    best_params = RegressorHyperParameterSearch(x_trainval, y_trainval, x_test, y_test, lr_list, 
                                                                              dropouts_list, num_layers, minNodes, maxNodes, step,
                                                                              activations_list=["tanh", "relu"])
 
     print(f"Best hyperparameters for {num_layers} hidden layers: ", best_params)
-    print("\nTop 5 worst models: \n", worst_models)
+    #print("\nTop 5 worst models: \n", worst_models)
 
-    print("\nTop 5 best models: \n", best_models)
+    #print("\nTop 5 best models: \n", best_models)
 
-    best_regressor = load_regressor()
-    best_regressor.plot_losses()
+    #best_regressor = load_regressor()
+    #best_regressor.plot_losses()
 
 if __name__ == "__main__":
-    num_layers = int(sys.argv[1])
-    example_tuning(num_layers)
-    #example_main()
+    #num_layers = int(sys.argv[1])
+    #example_tuning(num_layers)
+    example_main()
