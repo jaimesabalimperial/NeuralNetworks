@@ -147,9 +147,7 @@ class Regressor(torch.nn.Module):
         self.losses = None
 
     def forward(self, x):
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
+        """"""
         for layer in self.layers:
             output = layer(x)
             x = output
@@ -174,10 +172,6 @@ class Regressor(torch.nn.Module):
               size (batch_size, 1).
 
         """
-
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
         if training:
             # presenting statistics of the data
             # print("The number of rows and colums are {} and also called shape of the matrix".format(x.shape))
@@ -231,10 +225,6 @@ class Regressor(torch.nn.Module):
             self {Regressor} -- Trained model.
 
         """
-
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
         X, Y = self._preprocessor(x, y=y, training=True)  # Do not forget
         # convert data frame to tensor for the NN
         X = torch.tensor(X, dtype=torch.float)
@@ -260,10 +250,6 @@ class Regressor(torch.nn.Module):
 
         self.losses = losses
 
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
-
     def predict(self, x):
         """
         Ouput the value corresponding to an input x.
@@ -273,24 +259,16 @@ class Regressor(torch.nn.Module):
                 (batch_size, input_size).
 
         Returns:
-            {np.darray} -- Predicted value for the given input (batch_size, 1).
+            prediction {np.darray} -- Predicted value for the given input (batch_size, 1).
 
         """
-
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
-
-        X, _ = self._preprocessor(x, training=False)  # I am not sure if needed here
+        X, _ = self._preprocessor(x, training=False)  
         # convert data frame to tensor for the NN
         X = torch.tensor(X, dtype=torch.float)
         with torch.no_grad():
             prediction = self.forward(X)
         return np.array(prediction)
 
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
 
     def score(self, x, y):
         """
@@ -305,26 +283,22 @@ class Regressor(torch.nn.Module):
             {float} -- Quantification of the efficiency of the model.
 
         """
-
-        #######################################################################
-        #                       ** START OF YOUR CODE **
-        #######################################################################
-
         Y_pred = self.predict(x)
         rmse = np.sqrt(sklearn.metrics.mean_squared_error(y, Y_pred))
         return rmse
 
-        #######################################################################
-        #                       ** END OF YOUR CODE **
-        #######################################################################
 
-    def plot_losses(self):
+    def plot_losses(self, val=False):
+        """"""
         plt.figure()
         plt.grid()
         plt.plot(np.linspace(0, len(self.losses), len(self.losses)), self.losses)
-        plt.plot(np.linspace(0, len(self.losses_val), len(self.losses_val)), self.losses_val)
+
+        if val:
+            plt.plot(np.linspace(0, len(self.val_losses), len(self.val_losses)), self.val_losses)
+
         plt.xlabel("Epoch")
-        plt.ylabel("MSE Loss")
+        plt.ylabel("RMSE Loss")
         plt.legend(['train loss', 'validation loss'])
         plt.show()
 
@@ -332,6 +306,9 @@ class Regressor(torch.nn.Module):
 def save_regressor(trained_model):
     """
     Utility function to save the trained regressor model in part2_model.pickle.
+
+    Args:
+        trained_model (Regressor()): Trained Regressor() object.
     """
     # If you alter this, make sure it works in tandem with load_regressor
     with open('part2_model.pickle', 'wb') as target:
@@ -342,6 +319,9 @@ def save_regressor(trained_model):
 def load_regressor():
     """
     Utility function to load the trained regressor model in part2_model.pickle.
+
+    Returns:
+        trained_model (Regressor()): Trained Regressor() object.
     """
     # If you alter this, make sure it works in tandem with save_regressor
     with open('part2_model.pickle', 'rb') as target:
@@ -476,7 +456,7 @@ def example_main():
         test_size=0.20, random_state=42)
 
     # fit regressor
-    regressor = Regressor(x_train, nb_epoch=100, nodes_h_layers=[400, 150, 50], activation="relu", lr=0.01, dropout=0.1)
+    regressor = Regressor(x_train, nb_epoch=2000, nodes_h_layers=[60, 80], activation="relu", lr=0.455, dropout=0.0)
     regressor.fit(x_train, y_train)
     # y_pred = regressor.predict(x_test)
     # sqrt_error = np.sqrt(sklearn.metrics.mean_squared_error(y_test, y_pred))
@@ -488,6 +468,8 @@ def example_main():
     save_regressor(regressor)
 
     new_regressor = load_regressor()
+    test_err = new_regressor.score(x_test, y_test)
+    print("Test error on loaded model: ", test_err)
 
 
 if __name__ == "__main__":
