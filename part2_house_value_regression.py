@@ -1,9 +1,3 @@
-import copy
-from operator import truediv
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
-import sys
-
 import matplotlib.pyplot as plt
 import sklearn.impute
 import torch
@@ -13,7 +7,16 @@ import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import GridSearchCV
+
+import copy
+import seaborn as sns
+from pandas.plotting import scatter_matrix
+from sklearn.impute import SimpleImputer
+from sklearn.model_selection import cross_val_score
+from sklearn.linear_model import LinearRegression
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import RandomForestRegressor
+from sklearn import metrics
 
 import torch
 import torch.nn as nn
