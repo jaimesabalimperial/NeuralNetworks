@@ -1,4 +1,5 @@
 import copy
+import tqdm
 
 import matplotlib.pyplot as plt
 import sklearn.impute
@@ -349,29 +350,115 @@ def load_regressor():
     return trained_model
 
 
-def RegressorHyperParameterSearch():
+
+def RegressorHyperParameterSearch(x_trainval, y_trainval,  x_test, y_test, lr_list, dropouts, num_layers, 
+                                  minNodes, maxNodes, step, activations_list=["tanh", "relu"], nb_epochs = 2000):
     # Ensure to add whatever inputs you deem necessary to this function
     """
     Performs a hyper-parameter for fine-tuning the regressor implemented
     in the Regressor class.
 
     Arguments:
-        Add whatever inputs you need.
+        x_trainval (pd.DataFrame): Dataframe containing the input training data to the regressor. 
+        y_trainval (pd.DataFrame): Dataframe containing the target training data to the regressor. 
+        x_test (pd.DataFrame): Dataframe containing the input test data to evaluate the regressor. 
+        y_test (pd.DataFrame):Dataframe containing the target test data to evaluate the regressor. 
+        lr_list (np.ndarray): 
+        dropouts (np.ndarray): 
+        num_layers (int): 
+        minNodes (int): 
+        maxNodes (int): 
+        step (int): 
+        activations_list {list}: 
+        nb_epochs {int}: number of epochs to train the models with 
+
 
     Returns:
-        The function should return your optimised hyper-parameters.
+        best_params (dict): Dictionary containing optimised hyper-parameters.
 
     """
+    best_params = {"lr": None, "dropout": None, "activation": None, "n_per_layer": None}
+    possible_n_per_layer = [np.arange(minNodes, maxNodes, step) for _ in range(num_layers)]
+    node_combinations = [list(x) for x in np.array(np.meshgrid(*possible_n_per_layer)).T.reshape(-1,len(possible_n_per_layer))]
+    best_val_err = float("inf")
+    worst_models = {}
+    best_models = {}
+    cv = CrossValidation()
 
-    #######################################################################
-    #                       ** START OF YOUR CODE **
-    #######################################################################
+    total_hp_combs = len(node_combinations)*len(activations_list)*len(dropouts)*len(lr_list)
 
-    return  # Return the chosen hyper parameters
+    i = 0
+    for nodes_h_layers in tqdm(node_combinations):
+        for activation in activations_list:
+            for dropout in dropouts:
+                for lr in lr_list:
+                    i += 1
+                    print(f"\nModel {i}/{total_hp_combs}")
+                    splits = cv.train_test_k_fold(x_trainval, y_trainval)
+                    cv_val_errors = []
+                    for j, (train_indices, val_indices) in enumerate(splits):
+                        print(f"inner fold {j+1}/{cv.folds}")
+                        #retrieve training and validation sets from random indices (splits)
+                        x_train = x_trainval.iloc[train_indices, :]
+                        y_train = y_trainval.iloc[train_indices]
+                        x_val = x_trainval.iloc[val_indices, :]
+                        y_val = y_trainval.iloc[val_indices]
 
-    #######################################################################
-    #                       ** END OF YOUR CODE **
-    #######################################################################
+                        regressor = Regressor(x_train, nb_epoch=nb_epochs, nodes_h_layers=nodes_h_layers, 
+                                              activation=activation, lr=lr, dropout=dropout)
+                        regressor.fit(x_train, y_train, x_val=x_val, y_val=y_val)
+                        val_err = regressor.score_training(x_val, y_val)
+                        cv_val_errors.append(val_err)
+
+                    mean_val_error = np.mean(cv_val_errors)
+
+                    #rank top 5 worst models
+                    if len(worst_models) < 5:
+                        worst_models[(tuple(nodes_h_layers),activation,dropout,lr)] = mean_val_error
+                    
+                    else:
+                        if val_err > np.min(list(worst_models.values())):
+                            del worst_models[min(worst_models, key=worst_models.get)]
+                            worst_models[(tuple(nodes_h_layers),activation,dropout,lr)] = mean_val_error
+                    
+                    #rank top 5 best models
+                    if len(best_models) < 5:
+                        best_models[(tuple(nodes_h_layers),activation,dropout,lr)] = mean_val_error
+                    
+                    else:
+                        if val_err < np.max(list(best_models.values())):
+                            del best_models[max(best_models, key=best_models.get)]
+                            best_models[(tuple(nodes_h_layers),activation,dropout,lr)] = mean_val_error
+
+                    if mean_val_error < best_val_err:
+                        best_val_err = mean_val_error
+
+                        print(f"\nUpdated best val error: {best_val_err}")
+                        print(f"Hyperparemeters:")
+                        print(f"Activation = {activation}")
+                        print(f"Learning rate = {lr}")
+                        print(f"Nodes per layer = {nodes_h_layers}")
+                        print(f"Dropout = {dropout}")
+
+                        best_params["lr"] = lr
+                        best_params["dropout"] = dropout
+                        best_params["activation"] = activation
+                        best_params["n_per_layer"] = nodes_h_layers
+
+
+    #save best regressor 
+    regressor = Regressor(x_train, nb_epoch=nb_epochs, nodes_h_layers=best_params["n_per_layer"], 
+                          activation=best_params["activation"], lr=best_params["lr"], dropout=best_params["dropout"])
+    regressor.fit(x_train, y_train)
+    print("Best regressor has validation error: ", best_val_err)
+    #regressor.plot_losses()
+    test_err = regressor.score(x_test, y_test)
+    print("Best regressor has test error: ", test_err)
+
+    #save best regressor
+    save_regressor(regressor)
+
+    return best_params
 
 
 def example_main():
