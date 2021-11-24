@@ -512,7 +512,7 @@ def example_main():
     loaded_test_err = loaded_regressor.score(x_test, y_test)
     print("\nLoaded model test regressor error: {}\n".format(loaded_test_err))
 
-    test_predictions = loaded_regressor.predict(x_test)
+   #test_predictions = loaded_regressor.predict(x_test)
 
     #plt.figure()
     #plt.grid()
